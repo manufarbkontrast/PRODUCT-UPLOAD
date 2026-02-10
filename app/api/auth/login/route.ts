@@ -6,7 +6,7 @@ export async function POST(request: NextRequest) {
     const { username, pin } = await request.json();
     const creds = getCredentials();
 
-    if (username !== creds.username || pin !== creds.pin) {
+    if (username !== creds.username || String(pin) !== String(creds.pin)) {
       return NextResponse.json(
         { error: 'Falscher Benutzername oder PIN' },
         { status: 401 }
