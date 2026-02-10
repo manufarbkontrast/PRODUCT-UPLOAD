@@ -21,8 +21,7 @@ export interface FileInfo {
 }
 
 /**
- * Upload a file to Google Drive
- * Supports both regular Drive folders and Shared Drives
+ * Upload a file to Google Drive.
  */
 export async function uploadFile(
   fileName: string,
@@ -33,21 +32,16 @@ export async function uploadFile(
   const drive = await getDriveClient();
   const parentId = folderId || await getOrCreateDriveFolderId();
 
-  const fileMetadata = {
-    name: fileName,
-    parents: [parentId],
-  };
-
-  const media = {
-    mimeType,
-    body: content instanceof Buffer ? Readable.from(content) : content,
-  };
-
   const response = await drive.files.create({
-    requestBody: fileMetadata,
-    media,
+    requestBody: {
+      name: fileName,
+      parents: [parentId],
+    },
+    media: {
+      mimeType,
+      body: content instanceof Buffer ? Readable.from(content) : content,
+    },
     fields: 'id, name, webViewLink, webContentLink',
-    supportsAllDrives: true, // Support Shared Drives
   });
 
   return {
@@ -59,7 +53,7 @@ export async function uploadFile(
 }
 
 /**
- * Upload an image to Google Drive
+ * Upload an image to Google Drive.
  */
 export async function uploadImage(
   fileName: string,
@@ -71,7 +65,7 @@ export async function uploadImage(
 }
 
 /**
- * List files in a folder
+ * List files in a folder.
  */
 export async function listFiles(
   folderId?: string,
@@ -84,8 +78,6 @@ export async function listFiles(
     q: `'${parentId}' in parents and trashed = false`,
     pageSize,
     fields: 'files(id, name, mimeType, size, createdTime, modifiedTime, webViewLink, webContentLink)',
-    supportsAllDrives: true,
-    includeItemsFromAllDrives: true,
   });
 
   return (response.data.files || []).map((file) => ({
@@ -101,7 +93,7 @@ export async function listFiles(
 }
 
 /**
- * Get file by ID
+ * Get file by ID.
  */
 export async function getFile(fileId: string): Promise<FileInfo | null> {
   const drive = await getDriveClient();
@@ -110,7 +102,6 @@ export async function getFile(fileId: string): Promise<FileInfo | null> {
     const response = await drive.files.get({
       fileId,
       fields: 'id, name, mimeType, size, createdTime, modifiedTime, webViewLink, webContentLink',
-      supportsAllDrives: true,
     });
 
     return {
@@ -129,13 +120,13 @@ export async function getFile(fileId: string): Promise<FileInfo | null> {
 }
 
 /**
- * Download file content
+ * Download file content.
  */
 export async function downloadFile(fileId: string): Promise<Buffer> {
   const drive = await getDriveClient();
 
   const response = await drive.files.get(
-    { fileId, alt: 'media', supportsAllDrives: true },
+    { fileId, alt: 'media' },
     { responseType: 'arraybuffer' }
   );
 
@@ -143,13 +134,13 @@ export async function downloadFile(fileId: string): Promise<Buffer> {
 }
 
 /**
- * Delete a file
+ * Delete a file.
  */
 export async function deleteFile(fileId: string): Promise<boolean> {
   const drive = await getDriveClient();
 
   try {
-    await drive.files.delete({ fileId, supportsAllDrives: true });
+    await drive.files.delete({ fileId });
     return true;
   } catch {
     return false;
@@ -157,8 +148,7 @@ export async function deleteFile(fileId: string): Promise<boolean> {
 }
 
 /**
- * Create a folder in Google Drive
- * Supports both regular Drive folders and Shared Drives
+ * Create a folder in Google Drive.
  */
 export async function createFolder(
   folderName: string,
@@ -167,16 +157,13 @@ export async function createFolder(
   const drive = await getDriveClient();
   const parentId = parentFolderId || await getOrCreateDriveFolderId();
 
-  const fileMetadata = {
-    name: folderName,
-    mimeType: 'application/vnd.google-apps.folder',
-    parents: [parentId],
-  };
-
   const response = await drive.files.create({
-    requestBody: fileMetadata,
+    requestBody: {
+      name: folderName,
+      mimeType: 'application/vnd.google-apps.folder',
+      parents: [parentId],
+    },
     fields: 'id, name, webViewLink, webContentLink',
-    supportsAllDrives: true, // Support Shared Drives
   });
 
   return {
@@ -188,7 +175,7 @@ export async function createFolder(
 }
 
 /**
- * Make a file publicly accessible
+ * Make a file publicly accessible.
  */
 export async function makeFilePublic(fileId: string): Promise<void> {
   const drive = await getDriveClient();
@@ -199,6 +186,5 @@ export async function makeFilePublic(fileId: string): Promise<void> {
       role: 'reader',
       type: 'anyone',
     },
-    supportsAllDrives: true,
   });
 }

@@ -34,8 +34,7 @@ async function findFolderByName(name: string): Promise<string | null> {
     q: `name = '${name}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
     fields: 'files(id, name)',
     pageSize: 1,
-    supportsAllDrives: true,
-    includeItemsFromAllDrives: true,
+    // Only search the service account's own Drive (not shared drives)
   });
 
   const files = response.data.files || [];
@@ -52,8 +51,7 @@ async function findSpreadsheetByName(name: string, folderId: string): Promise<st
     q: `name = '${name}' and mimeType = 'application/vnd.google-apps.spreadsheet' and '${folderId}' in parents and trashed = false`,
     fields: 'files(id, name)',
     pageSize: 1,
-    supportsAllDrives: true,
-    includeItemsFromAllDrives: true,
+    // Only search the service account's own Drive (not shared drives)
   });
 
   const files = response.data.files || [];
@@ -93,7 +91,6 @@ export async function getOrCreateDriveFolderId(): Promise<string> {
       mimeType: 'application/vnd.google-apps.folder',
     },
     fields: 'id',
-    supportsAllDrives: true,
   });
 
   const newId = response.data.id!;
@@ -158,7 +155,6 @@ export async function getOrCreateSpreadsheetId(): Promise<string> {
     fileId: newId,
     addParents: folderId,
     fields: 'id, parents',
-    supportsAllDrives: true,
   });
 
   // Initialize headers

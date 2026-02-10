@@ -1,27 +1,30 @@
 import { NextResponse } from 'next/server';
 import {
-  GOOGLE_CONFIG,
+  getOrCreateDriveFolderId,
+  getOrCreateSpreadsheetId,
+  getAuthStatus,
+  getDriveClient,
   listFiles,
   getSheetInfo,
-  appendToSheet,
-  readSheet,
 } from '@/lib/google';
 
+/**
+ * GET: Test Google Drive + Sheets connection.
+ * Auto-creates folder and spreadsheet if they don't exist.
+ */
 export async function GET() {
   try {
-    // Test Google Drive connection
-    const files = await listFiles(GOOGLE_CONFIG.DRIVE_FOLDER_ID, 10);
-
-    // Test Google Sheets connection
+    const authStatus = getAuthStatus();
+    const driveFolderId = await getOrCreateDriveFolderId();
+    const spreadsheetId = await getOrCreateSpreadsheetId();
+    const files = await listFiles(driveFolderId, 10);
     const sheetInfo = await getSheetInfo();
 
     return NextResponse.json({
       success: true,
       message: 'Google API connection successful!',
-      config: {
-        driveFolderId: GOOGLE_CONFIG.DRIVE_FOLDER_ID,
-        spreadsheetId: GOOGLE_CONFIG.SPREADSHEET_ID,
-      },
+      auth: { method: authStatus.method, ready: authStatus.ready },
+      config: { driveFolderId, spreadsheetId },
       drive: {
         filesCount: files.length,
         files: files.map((f) => ({ id: f.id, name: f.name })),
@@ -33,37 +36,42 @@ export async function GET() {
       },
     });
   } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
     console.error('Google API test failed:', error);
     return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      },
+      { success: false, error: message },
       { status: 500 }
     );
   }
 }
 
+/**
+ * POST: Test write access by creating and immediately deleting a test folder.
+ */
 export async function POST() {
   try {
-    // Test writing to sheet
-    const testData = [
-      ['Test', new Date().toISOString(), 'Hello from API'],
-    ];
+    const drive = await getDriveClient();
+    const folderId = await getOrCreateDriveFolderId();
 
-    const rowsAdded = await appendToSheet(testData);
+    const response = await drive.files.create({
+      requestBody: {
+        name: `SPZ-Test-${Date.now()}`,
+        mimeType: 'application/vnd.google-apps.folder',
+        parents: [folderId],
+      },
+      fields: 'id, name',
+    });
 
-    // Read back the data
-    const data = await readSheet();
+    if (response.data.id) {
+      await drive.files.delete({ fileId: response.data.id });
+    }
 
     return NextResponse.json({
       success: true,
-      message: 'Test data written successfully!',
-      rowsAdded,
-      currentData: data,
+      message: 'Drive write test passed (folder created and deleted).',
     });
   } catch (error) {
-    console.error('Google Sheets write test failed:', error);
+    console.error('Google Drive write test failed:', error);
     return NextResponse.json(
       {
         success: false,
