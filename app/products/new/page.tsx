@@ -188,6 +188,12 @@ export default function NewProductPage() {
       }
 
       const product = await res.json();
+
+      // Bei bestehendem Produkt: Hinweis anzeigen, trotzdem weiterleiten
+      if (product.existingProduct) {
+        console.info('Produkt mit dieser EAN existiert bereits, weiterleitung...');
+      }
+
       router.push(`/products/${product.id}/images`);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Fehler beim Speichern';

@@ -66,9 +66,38 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = createServerClient();
+    const sanitizedEan = ean?.trim() || null;
+
+    // Wenn EAN vorhanden: prüfen ob schon ein Produkt existiert
+    if (sanitizedEan) {
+      const { data: existing } = await supabase
+        .from('products')
+        .select()
+        .eq('ean', sanitizedEan)
+        .maybeSingle();
+
+      if (existing) {
+        // Bestehendes Produkt zurückgeben — Client leitet dorthin weiter
+        return NextResponse.json({
+          id: existing.id,
+          ean: existing.ean,
+          name: existing.name,
+          gender: existing.gender,
+          category: existing.category,
+          description: existing.description,
+          sku: existing.sku,
+          status: existing.status,
+          driveUrl: existing.drive_url,
+          zalandoAttributes: existing.zalando_attributes,
+          createdAt: existing.created_at,
+          updatedAt: existing.updated_at,
+          existingProduct: true,
+        }, { status: 200 });
+      }
+    }
 
     const insertData = {
-      ean: ean || null,
+      ean: sanitizedEan,
       name,
       gender,
       category,
@@ -105,15 +134,6 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     console.error('POST /api/products error:', errorMessage, error);
-
-    // Supabase-spezifische Fehler erkennen
-    const supaError = error as { code?: string; details?: string };
-    if (supaError.code === '23505') {
-      return NextResponse.json(
-        { error: 'Ein Produkt mit dieser EAN existiert bereits' },
-        { status: 409 }
-      );
-    }
 
     return NextResponse.json(
       { error: `Fehler beim Erstellen: ${errorMessage}` },
