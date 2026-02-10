@@ -178,13 +178,20 @@ export default function NewProductPage() {
       });
 
       if (!res.ok) {
-        throw new Error('Fehler beim Speichern');
+        const errorBody = await res.text();
+        console.error('POST /api/products failed:', res.status, errorBody);
+        throw new Error(
+          res.status === 401
+            ? 'Nicht eingeloggt. Bitte neu einloggen.'
+            : `Fehler beim Speichern (${res.status})`
+        );
       }
 
       const product = await res.json();
       router.push(`/products/${product.id}/images`);
-    } catch {
-      setErrors({ form: 'Fehler beim Speichern. Bitte erneut versuchen.' });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Fehler beim Speichern';
+      setErrors({ form: `${message}. Bitte erneut versuchen.` });
     } finally {
       setLoading(false);
     }

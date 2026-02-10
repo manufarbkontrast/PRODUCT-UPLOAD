@@ -103,7 +103,21 @@ export async function POST(request: NextRequest) {
       updatedAt: product.updated_at,
     }, { status: 201 });
   } catch (error) {
-    console.error('POST /api/products error:', error);
-    return NextResponse.json({ error: 'Fehler beim Erstellen des Produkts' }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error('POST /api/products error:', errorMessage, error);
+
+    // Supabase-spezifische Fehler erkennen
+    const supaError = error as { code?: string; details?: string };
+    if (supaError.code === '23505') {
+      return NextResponse.json(
+        { error: 'Ein Produkt mit dieser EAN existiert bereits' },
+        { status: 409 }
+      );
+    }
+
+    return NextResponse.json(
+      { error: `Fehler beim Erstellen: ${errorMessage}` },
+      { status: 500 }
+    );
   }
 }
