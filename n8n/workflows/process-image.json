@@ -1,0 +1,237 @@
+{
+  "name": "Process Product Image",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "process-image",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "process-image"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Webhook').item.json.body?.internalAppUrl || 'http://web-dev:3000' }}/api/internal/process-image",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Admin-Token",
+              "value": "={{ $('Webhook').item.json.body.adminToken }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ imageUrl: $('Webhook').item.json.body.imageUrl, productId: $('Webhook').item.json.body.productId, imageId: $('Webhook').item.json.body.imageId, filename: $('Webhook').item.json.body.filename, category: $('Webhook').item.json.body.category }) }}",
+        "options": {
+          "timeout": 300000,
+          "fullResponse": false
+        }
+      },
+      "id": "process-gemini",
+      "name": "Gemini Processing",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 300],
+      "onError": "continueRegularOutput",
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition-success",
+              "leftValue": "={{ $json.success }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-success",
+      "name": "Success?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [720, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Webhook').item.json.body.callbackUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Admin-Token",
+              "value": "={{ $('Webhook').item.json.body.adminToken }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ success: true, processedUrl: $('Gemini Processing').item.json.processedUrl, storagePath: $('Gemini Processing').item.json.storagePath, imageId: $('Webhook').item.json.body.imageId, productId: $('Webhook').item.json.body.productId }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "callback-success",
+      "name": "Success Callback",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [960, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Webhook').item.json.body.callbackUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Admin-Token",
+              "value": "={{ $('Webhook').item.json.body.adminToken }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ success: false, error: $('Gemini Processing').item.json.error || 'Unknown processing error', imageId: $('Webhook').item.json.body.imageId, productId: $('Webhook').item.json.body.productId }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "callback-error",
+      "name": "Error Callback",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [960, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ received: true }) }}",
+        "options": {}
+      },
+      "id": "respond-success",
+      "name": "Respond Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1200, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ received: true }) }}",
+        "options": {}
+      },
+      "id": "respond-error",
+      "name": "Respond Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1200, 400]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Gemini Processing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Processing": {
+      "main": [
+        [
+          {
+            "node": "Success?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Success?": {
+      "main": [
+        [
+          {
+            "node": "Success Callback",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error Callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Success Callback": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Callback": {
+      "main": [
+        [
+          {
+            "node": "Respond Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "image-processing"
+    }
+  ]
+}
