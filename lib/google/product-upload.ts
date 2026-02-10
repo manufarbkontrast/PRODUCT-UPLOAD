@@ -112,7 +112,7 @@ export async function uploadProductToDrive(product: ProductUploadData): Promise<
       console.log(`[DriveUpload] Uploaded: ${result.name}`);
     } catch (error) {
       console.error(`[DriveUpload] Failed to upload ${image.filename}:`, error);
-      throw error;
+      // Continue with remaining images instead of aborting the entire upload
     }
   }
 

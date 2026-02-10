@@ -131,25 +131,25 @@ export async function POST(
         .select('id, filename, original_path, processed_path, status, sort_order')
         .eq('product_id', id);
 
-      const allDone = updatedImages?.every((i) => i.status === 'done');
-      const hasError = updatedImages?.some((i) => i.status === 'error');
+      const doneImages = updatedImages?.filter((i) => i.status === 'done') || [];
+      const allError = updatedImages?.every((i) => i.status === 'error');
 
-      if (hasError || !allDone) {
+      if (allError || doneImages.length === 0) {
         await supabase
           .from('products')
-          .update({ status: hasError ? 'error' : 'draft' })
+          .update({ status: 'error' })
           .eq('id', id);
 
         return NextResponse.json({
-          status: 'completed',
+          status: 'error',
           imageCount: product.images.length,
           imageType,
           specs,
-          message: `${product.images.length} Bilder verarbeitet (mit Fehlern)`,
+          message: `Alle ${product.images.length} Bilder fehlgeschlagen`,
         });
       }
 
-      // All images done — trigger Drive upload in background
+      // At least some images are done — upload them to Google Drive
       await supabase
         .from('products')
         .update({ status: 'uploading' })
@@ -165,6 +165,7 @@ export async function POST(
         return supabase.storage.from('product-images').getPublicUrl(path).data.publicUrl;
       };
 
+      // Only include successfully processed images for Drive upload
       const uploadData: ProductUploadData = {
         id: product.id,
         ean: product.ean,
@@ -173,7 +174,7 @@ export async function POST(
         category: product.category,
         description: product.description,
         sku: product.sku,
-        images: (updatedImages || []).map((img) => ({
+        images: doneImages.map((img) => ({
           id: img.id,
           originalPath: resolveOriginalUrl(img.original_path),
           processedPath: img.processed_path ? resolveUrl(img.processed_path) : null,
@@ -182,32 +183,40 @@ export async function POST(
         })),
       };
 
-      // Fire-and-forget: upload to Drive in background
-      uploadProductToDrive(uploadData)
-        .then(async (result) => {
-          console.log(`[Process] Drive upload complete for product ${id}: ${result.folderUrl}`);
-          const sb = createServerClient();
-          await sb
-            .from('products')
-            .update({ status: 'uploaded', drive_url: result.folderUrl })
-            .eq('id', id);
-        })
-        .catch(async (err) => {
-          console.error(`[Process] Drive upload failed for product ${id}:`, err);
-          const sb = createServerClient();
-          await sb
-            .from('products')
-            .update({ status: 'drive_error' })
-            .eq('id', id);
-        });
+      // Upload to Drive synchronously (await) so Vercel doesn't kill the function
+      try {
+        const result = await uploadProductToDrive(uploadData);
+        console.log(`[Process] Drive upload complete for product ${id}: ${result.folderUrl}`);
+        await supabase
+          .from('products')
+          .update({ status: 'uploaded', drive_url: result.folderUrl })
+          .eq('id', id);
 
-      return NextResponse.json({
-        status: 'uploading',
-        imageCount: product.images.length,
-        imageType,
-        specs,
-        message: `${product.images.length} Bilder verarbeitet, Upload zu Google Drive gestartet`,
-      });
+        return NextResponse.json({
+          status: 'uploaded',
+          imageCount: product.images.length,
+          processedCount: doneImages.length,
+          imageType,
+          specs,
+          driveUrl: result.folderUrl,
+          message: `${doneImages.length} Bild(er) verarbeitet und zu Google Drive hochgeladen`,
+        });
+      } catch (driveErr) {
+        console.error(`[Process] Drive upload failed for product ${id}:`, driveErr);
+        await supabase
+          .from('products')
+          .update({ status: 'drive_error' })
+          .eq('id', id);
+
+        return NextResponse.json({
+          status: 'drive_error',
+          imageCount: product.images.length,
+          processedCount: doneImages.length,
+          imageType,
+          specs,
+          message: `Bilder verarbeitet, aber Drive-Upload fehlgeschlagen: ${driveErr instanceof Error ? driveErr.message : String(driveErr)}`,
+        });
+      }
     }
 
     // n8n mode: Dispatch each image to n8n (fire-and-forget)
