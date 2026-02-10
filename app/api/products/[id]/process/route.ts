@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase/server';
 import { categoryImageType, getImageSpecsForCategory } from '@/config/image-processing';
+import { processImageWithGemini } from '@/lib/gemini-processor';
 import { uploadProductToDrive, type ProductUploadData } from '@/lib/google/product-upload';
+
+// Vercel Functions können bis zu 60s laufen (Hobby) / 300s (Pro)
+export const maxDuration = 60;
 
 export async function POST(
   request: NextRequest,
@@ -50,13 +54,11 @@ export async function POST(
     }
 
     const useDirectProcessing = !n8nWebhookUrl || !n8nAvailable;
-    console.log(`[Process] n8n URL: ${n8nWebhookUrl || 'nicht konfiguriert'}, verfügbar: ${n8nAvailable}, direkte Verarbeitung: ${useDirectProcessing}`);
 
     const imageType = categoryImageType[product.category] || 'clothing';
     const specs = getImageSpecsForCategory(product.category);
 
-    console.log(`[Process] Product ${id}: ${product.images.length} images`);
-    console.log(`[Process] Category: ${product.category}, Type: ${imageType}`);
+    console.log(`[Process] Product ${id}: ${product.images.length} images, direct: ${useDirectProcessing}`);
 
     // Update product status to processing
     await supabase
@@ -72,66 +74,48 @@ export async function POST(
         .eq('id', img.id);
     }
 
-    // Build callback URL - nutze localhost für lokale Entwicklung
-    let internalAppUrl = process.env.INTERNAL_APP_URL || 'http://localhost:3000';
-
-    // Wenn INTERNAL_APP_URL auf Docker-Host zeigt (web-dev), aber lokal läuft, nutze localhost
-    if (internalAppUrl.includes('web-dev')) {
-      internalAppUrl = 'http://localhost:3000';
-      console.log(`[Process] Docker-URL erkannt, nutze localhost stattdessen`);
-    }
-    const callbackUrl = `${internalAppUrl}/api/webhooks/n8n`;
-
     if (useDirectProcessing) {
-      // Direkte Verarbeitung ohne n8n
-      console.log(`[Process] n8n nicht konfiguriert, verarbeite ${product.images.length} Bilder direkt...`);
-
+      // Direkte Verarbeitung: Gemini + Sharp direkt aufrufen (kein HTTP Self-Call)
       for (const img of product.images) {
-        let imageUrl: string;
-        if (img.original_path.startsWith('http')) {
-          imageUrl = img.original_path;
-        } else {
-          const { data: urlData } = supabase.storage
-            .from('product-images')
-            .getPublicUrl(img.original_path);
-          imageUrl = urlData.publicUrl;
-        }
+        const imageUrl = img.original_path.startsWith('http')
+          ? img.original_path
+          : supabase.storage.from('product-images').getPublicUrl(img.original_path).data.publicUrl;
 
         try {
-          console.log(`[Process] Verarbeite Bild ${img.id} direkt...`);
-          const processRes = await fetch(`${internalAppUrl}/api/internal/process-image`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Admin-Token': process.env.ADMIN_TOKEN || '',
-            },
-            body: JSON.stringify({
-              imageUrl,
-              productId: id,
-              imageId: img.id,
-              filename: img.filename,
-              category: product.category,
-            }),
-          });
+          console.log(`[Process] Verarbeite Bild ${img.id} direkt mit Gemini...`);
 
-          const processResult = await processRes.json();
+          // Gemini + Sharp direkt aufrufen
+          const processed = await processImageWithGemini(imageUrl, product.category);
 
-          if (processResult.success) {
-            await supabase
-              .from('product_images')
-              .update({
-                status: 'done',
-                processed_path: processResult.processedUrl,
-              })
-              .eq('id', img.id);
-            console.log(`[Process] Bild ${img.id} erfolgreich verarbeitet`);
-          } else {
-            await supabase
-              .from('product_images')
-              .update({ status: 'error' })
-              .eq('id', img.id);
-            console.error(`[Process] Fehler bei Bild ${img.id}:`, processResult.error);
+          // Upload verarbeitetes Bild zu Supabase Storage
+          const baseName = img.filename.replace(/\.[^.]+$/, '');
+          const processedFilename = `${baseName}_processed.${processed.format}`;
+          const storagePath = `${id}/${processedFilename}`;
+
+          const { error: uploadError } = await supabase.storage
+            .from('processed-images')
+            .upload(storagePath, processed.imageBuffer, {
+              contentType: processed.mimeType,
+              upsert: true,
+            });
+
+          if (uploadError) {
+            throw new Error(`Storage upload failed: ${uploadError.message}`);
           }
+
+          const { data: urlData } = supabase.storage
+            .from('processed-images')
+            .getPublicUrl(storagePath);
+
+          await supabase
+            .from('product_images')
+            .update({
+              status: 'done',
+              processed_path: urlData.publicUrl,
+            })
+            .eq('id', img.id);
+
+          console.log(`[Process] Bild ${img.id} erfolgreich verarbeitet`);
         } catch (err) {
           console.error(`[Process] Fehler bei Bild ${img.id}:`, err);
           await supabase
@@ -171,7 +155,6 @@ export async function POST(
         .update({ status: 'uploading' })
         .eq('id', id);
 
-      // Build upload data from fresh image records
       const resolveUrl = (path: string): string => {
         if (path.startsWith('http')) return path;
         return supabase.storage.from('processed-images').getPublicUrl(path).data.publicUrl;
@@ -227,20 +210,16 @@ export async function POST(
       });
     }
 
-    // Dispatch each image to n8n (fire-and-forget)
+    // n8n mode: Dispatch each image to n8n (fire-and-forget)
+    const internalAppUrl = process.env.INTERNAL_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+    const callbackUrl = `${internalAppUrl}/api/webhooks/n8n`;
+
     const dispatches = product.images.map(async (img: { id: string; filename: string; original_path: string }) => {
-      let imageUrl: string;
-      if (img.original_path.startsWith('http')) {
-        imageUrl = img.original_path;
-      } else {
-        const { data: urlData } = supabase.storage
-          .from('product-images')
-          .getPublicUrl(img.original_path);
-        imageUrl = urlData.publicUrl;
-      }
+      const imageUrl = img.original_path.startsWith('http')
+        ? img.original_path
+        : supabase.storage.from('product-images').getPublicUrl(img.original_path).data.publicUrl;
 
       try {
-        console.log(`[Process] Dispatching image ${img.id} to n8n`);
         await fetch(n8nWebhookUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -260,10 +239,7 @@ export async function POST(
       }
     });
 
-    // Wait for all dispatches to be sent (NOT for processing to complete)
     await Promise.allSettled(dispatches);
-
-    console.log(`[Process] ${product.images.length} images dispatched to n8n`);
 
     return NextResponse.json({
       status: 'processing',
@@ -275,7 +251,6 @@ export async function POST(
   } catch (error) {
     console.error(`POST /api/products/${id}/process error:`, error);
 
-    // Reset status on error
     try {
       const supabase = createServerClient();
       await supabase
