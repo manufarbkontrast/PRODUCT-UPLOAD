@@ -81,6 +81,7 @@ export async function POST(
       description: product.description,
       sku: product.sku,
       existingDriveUrl: product.drive_url || null,
+      zalandoAttributes: product.zalando_attributes || null,
       images: imagesWithUrls,
     });
 

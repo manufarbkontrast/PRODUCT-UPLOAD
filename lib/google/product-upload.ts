@@ -1,6 +1,6 @@
 import { createFolder, uploadFile, makeFilePublic, listFiles, getFile, UploadResult } from './drive';
 import { appendToSheet, findRowByValue, updateRow } from './sheets';
-import { getDefaultSheetName, SHEET_HEADERS } from './setup';
+import { getDefaultSheetName, SHEET_HEADERS, ZALANDO_SHEET_KEYS } from './setup';
 
 export interface ProductUploadData {
   id: string;
@@ -11,6 +11,7 @@ export interface ProductUploadData {
   description: string | null;
   sku: string | null;
   existingDriveUrl?: string | null;
+  zalandoAttributes?: Record<string, string> | null;
   images: Array<{
     id: string;
     originalPath: string;
@@ -78,11 +79,25 @@ function getExtensionFromMimeOrUrl(mimeType: string, url: string): string {
 }
 
 /**
+ * Convert a 1-based column number to a Sheets column letter (1→A, 26→Z, 27→AA, 37→AK).
+ */
+function columnToLetter(col: number): string {
+  let result = '';
+  let n = col;
+  while (n > 0) {
+    n--;
+    result = String.fromCharCode(65 + (n % 26)) + result;
+    n = Math.floor(n / 26);
+  }
+  return result;
+}
+
+/**
  * Compute the Sheets range string dynamically from SHEET_HEADERS length.
- * e.g. 11 headers → "Tabellenblatt1!A:K"
+ * e.g. 37 headers → "Tabellenblatt1!A:AK"
  */
 function getSheetRange(): string {
-  const lastCol = String.fromCharCode(64 + SHEET_HEADERS.length);
+  const lastCol = columnToLetter(SHEET_HEADERS.length);
   return `${getDefaultSheetName()}!A:${lastCol}`;
 }
 
@@ -236,7 +251,12 @@ async function syncToSheet(
       allImageUrls = uploadedFiles.map(f => f.webViewLink).join('\n');
     }
 
+    // Extract Zalando attribute values in the order defined by ZALANDO_SHEET_KEYS
+    const attrs = product.zalandoAttributes || {};
+    const zalandoCells = ZALANDO_SHEET_KEYS.map(key => attrs[key] || '');
+
     const rowData = [
+      // ── Produkt-Stammdaten ──
       new Date().toISOString(),
       product.id,
       product.ean || '',
@@ -245,6 +265,9 @@ async function syncToSheet(
       product.category,
       product.description || '',
       product.sku || '',
+      // ── Zalando-Attribute + Material (26 Spalten) ──
+      ...zalandoCells,
+      // ── Drive / Bilder ──
       folderUrl,
       totalImageCount.toString(),
       allImageUrls,

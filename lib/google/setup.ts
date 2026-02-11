@@ -11,6 +11,7 @@ const ROOT_FOLDER_NAME = 'SPZ-Product-Integration';
 const SPREADSHEET_NAME = 'SPZ-Product-Data';
 
 export const SHEET_HEADERS = [
+  // ── Produkt-Stammdaten ──
   'Timestamp',
   'Product ID',
   'EAN',
@@ -19,10 +20,73 @@ export const SHEET_HEADERS = [
   'Category',
   'Description',
   'SKU',
+  // ── Zalando-Attribute ──
+  'Brand',
+  'Primary Color',
+  'Supplier Color',
+  'Season',
+  'Size Group',
+  'Size Codes',
+  'Age Group',
+  'Target Gender',
+  // ── Material ──
+  'Hauptmaterial',
+  'Obermaterial Vorderseite',
+  'Obermaterial Rückseite',
+  'Obermaterial Ärmel',
+  'Obermaterial Oberteil',
+  'Obermaterial Unterteil',
+  'Obermaterial Mittelteil',
+  'Obermaterial Einsatz',
+  'Futter',
+  'Füllung',
+  'Kunstfellkragen',
+  'Innenjacke Futter',
+  'Innenjacke Außenmaterial',
+  'Innenjacke Polsterung',
+  'Mittellage Material',
+  'Außenjacke Innenmaterial',
+  'Ärmel-Futter',
+  'Besatz-Material',
+  // ── Drive / Bilder ──
   'Drive Folder',
   'Image Count',
   'Image URLs',
 ];
+
+/**
+ * Ordered keys for extracting Zalando attributes into sheet columns.
+ * Must match the order of Zalando headers in SHEET_HEADERS above.
+ */
+export const ZALANDO_SHEET_KEYS = [
+  'brand_code',
+  'color_code_primary',
+  'supplier_color',
+  'season_code',
+  'size_group',
+  'size_codes',
+  'target_age_groups',
+  'target_genders',
+  // Material keys (same order as headers)
+  'material_upper_material_clothing',
+  'material_upper_material_front',
+  'material_upper_material_back',
+  'material_upper_material_sleeves',
+  'material_upper_material_top',
+  'material_upper_material_bottom',
+  'material_upper_material_middle',
+  'material_upper_material_insert',
+  'material_futter_clothing',
+  'material_filling',
+  'material_faux_fur_collar_material',
+  'material_inner_jacket_lining',
+  'material_inner_jacket_outer_material',
+  'material_inner_jacket_padding',
+  'material_middle_layer_material',
+  'material_outer_jacket_inner_material',
+  'material_sleeve_lining',
+  'material_trim_material',
+] as const;
 
 /**
  * Search for an existing folder by name in Drive root.

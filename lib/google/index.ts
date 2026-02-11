@@ -8,6 +8,7 @@ export {
   getOrCreateSpreadsheetId,
   getDefaultSheetName,
   SHEET_HEADERS,
+  ZALANDO_SHEET_KEYS,
 } from './setup';
 
 export {
