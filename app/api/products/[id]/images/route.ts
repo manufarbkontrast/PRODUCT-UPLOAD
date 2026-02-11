@@ -23,6 +23,7 @@ export async function POST(
 
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
+    const replaceExisting = formData.get('replace') === 'true';
 
     if (!file) {
       return NextResponse.json({ error: 'Keine Datei hochgeladen' }, { status: 400 });
@@ -31,6 +32,56 @@ export async function POST(
     // Validate file type
     if (!file.type.startsWith('image/')) {
       return NextResponse.json({ error: 'Nur Bilder erlaubt' }, { status: 400 });
+    }
+
+    // If replace flag is set, delete all existing images for this product first
+    if (replaceExisting) {
+      const { data: existingImages } = await supabase
+        .from('product_images')
+        .select('id, original_path, processed_path')
+        .eq('product_id', id);
+
+      if (existingImages && existingImages.length > 0) {
+        console.log(`[Images] Replacing ${existingImages.length} existing images for product ${id}`);
+
+        // Delete from storage
+        const originalPaths = existingImages
+          .map((img) => {
+            if (!img.original_path) return null;
+            return img.original_path.includes('/product-images/')
+              ? img.original_path.split('/product-images/').pop()!
+              : img.original_path;
+          })
+          .filter(Boolean) as string[];
+
+        const processedPaths = existingImages
+          .map((img) => {
+            if (!img.processed_path) return null;
+            return img.processed_path.includes('/processed-images/')
+              ? img.processed_path.split('/processed-images/').pop()!
+              : img.processed_path;
+          })
+          .filter(Boolean) as string[];
+
+        if (originalPaths.length > 0) {
+          await supabase.storage.from('product-images').remove(originalPaths);
+        }
+        if (processedPaths.length > 0) {
+          await supabase.storage.from('processed-images').remove(processedPaths);
+        }
+
+        // Delete DB records
+        await supabase
+          .from('product_images')
+          .delete()
+          .eq('product_id', id);
+
+        // Reset product status
+        await supabase
+          .from('products')
+          .update({ status: 'draft' })
+          .eq('id', id);
+      }
     }
 
     // Generate unique filename

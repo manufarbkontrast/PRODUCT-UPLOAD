@@ -11,10 +11,11 @@ interface ImageFile {
 
 interface ImageUploaderProps {
   productId: string;
+  existingImageCount?: number;
   onUploadComplete?: () => void;
 }
 
-export default function ImageUploader({ productId, onUploadComplete }: ImageUploaderProps) {
+export default function ImageUploader({ productId, existingImageCount = 0, onUploadComplete }: ImageUploaderProps) {
   const [images, setImages] = useState<ImageFile[]>([]);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -60,6 +61,7 @@ export default function ImageUploader({ productId, onUploadComplete }: ImageUplo
     if (images.length === 0) return;
 
     setUploading(true);
+    let isFirstUpload = true;
 
     for (const image of images) {
       if (image.status !== 'pending') continue;
@@ -73,6 +75,12 @@ export default function ImageUploader({ productId, onUploadComplete }: ImageUplo
       try {
         const formData = new FormData();
         formData.append('file', image.file);
+
+        // On the first upload, replace existing images if there are any
+        if (isFirstUpload && existingImageCount > 0) {
+          formData.append('replace', 'true');
+        }
+        isFirstUpload = false;
 
         const res = await fetch(`/api/products/${productId}/images`, {
           method: 'POST',

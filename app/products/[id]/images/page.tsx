@@ -353,7 +353,7 @@ export default function ProductImagesPage({
         <h2 className="text-sm font-medium text-zinc-900 dark:text-white mb-3">
           Bilder hochladen
         </h2>
-        <ImageUploader productId={id} onUploadComplete={fetchProduct} />
+        <ImageUploader productId={id} existingImageCount={images.length} onUploadComplete={fetchProduct} />
       </div>
 
       {images.length > 0 && (
