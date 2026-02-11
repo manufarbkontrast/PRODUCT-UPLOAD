@@ -29,6 +29,8 @@ function getPhaseLabel(status: string): string {
   switch (status) {
     case 'processing':
       return 'Bilder werden verarbeitet...';
+    case 'processed':
+      return 'Wird zu Google Drive hochgeladen...';
     case 'uploading':
       return 'Wird zu Google Drive hochgeladen...';
     case 'uploaded':
@@ -83,6 +85,7 @@ export default function ProductImagesPage({
     const needsPolling =
       hasProcessing ||
       product.status === 'processing' ||
+      product.status === 'processed' ||
       product.status === 'uploading';
 
     if (needsPolling) {
@@ -90,6 +93,27 @@ export default function ProductImagesPage({
       return () => clearInterval(interval);
     }
   }, [product, fetchProduct]);
+
+  // Auto-trigger Drive upload when processing finished but upload was deferred (timeout protection)
+  useEffect(() => {
+    if (!product || product.status !== 'processed') return;
+
+    const triggerUpload = async () => {
+      try {
+        console.log('[Images] Processing done, triggering separate Drive upload...');
+        const res = await fetch(`/api/products/${id}/upload`, { method: 'POST' });
+        if (!res.ok) {
+          const data = await res.json();
+          console.error('[Images] Drive upload failed:', data.error);
+        }
+        await fetchProduct();
+      } catch (err) {
+        console.error('[Images] Drive upload trigger failed:', err);
+      }
+    };
+
+    triggerUpload();
+  }, [product?.status, id, fetchProduct]);
 
   const handleProcessImages = async () => {
     if (!product) return;

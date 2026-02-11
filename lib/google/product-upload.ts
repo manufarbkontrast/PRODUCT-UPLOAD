@@ -27,16 +27,42 @@ export interface ProductUploadResult {
 }
 
 /**
- * Download an image from a URL and return it as a Buffer
+ * Download an image from a URL with retry logic.
+ * Retries up to 3 times with 1s pause between attempts.
  */
-async function downloadImageFromUrl(url: string): Promise<{ buffer: Buffer; mimeType: string }> {
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`Failed to download image from ${url}: ${response.status} ${response.statusText}`);
+async function downloadImageFromUrl(
+  url: string,
+  maxRetries: number = 3
+): Promise<{ buffer: Buffer; mimeType: string }> {
+  let lastError: Error | null = null;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`[DriveUpload] Download attempt ${attempt}/${maxRetries}: ${url}`);
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status} ${response.statusText}`);
+      }
+      const arrayBuffer = await response.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+
+      if (buffer.length === 0) {
+        throw new Error('Downloaded file is empty (0 bytes)');
+      }
+
+      const mimeType = response.headers.get('content-type') || 'image/jpeg';
+      return { buffer, mimeType };
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      console.error(`[DriveUpload] Download attempt ${attempt} failed for ${url}:`, lastError.message);
+
+      if (attempt < maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
   }
-  const arrayBuffer = await response.arrayBuffer();
-  const mimeType = response.headers.get('content-type') || 'image/jpeg';
-  return { buffer: Buffer.from(arrayBuffer), mimeType };
+
+  throw new Error(`Failed to download image after ${maxRetries} attempts: ${url} — ${lastError?.message}`);
 }
 
 /**
@@ -81,39 +107,57 @@ export async function uploadProductToDrive(product: ProductUploadData): Promise<
   // SKU for file naming (fallback to product name sanitized)
   const sku = product.sku || product.name.replace(/[^a-zA-Z0-9\-_]/g, '').substring(0, 30);
 
-  // Upload each image sequentially
+  // Upload each image sequentially with fallback
   for (let i = 0; i < sortedImages.length; i++) {
     const image = sortedImages[i];
+    const primaryUrl = image.processedPath || image.originalPath;
+    const fallbackUrl = image.processedPath ? image.originalPath : null;
 
-    // Use processed path if available, otherwise original
-    const imageUrl = image.processedPath || image.originalPath;
-
-    if (!imageUrl) {
-      console.error(`[DriveUpload] No URL for image ${image.id}`);
+    if (!primaryUrl) {
+      console.error(`[DriveUpload] No URL for image ${image.id}, skipping`);
       continue;
     }
 
     try {
-      // Download image from URL (Supabase Storage)
-      console.log(`[DriveUpload] Downloading image ${i + 1}/${sortedImages.length}: ${imageUrl}`);
-      const { buffer, mimeType } = await downloadImageFromUrl(imageUrl);
+      let downloadResult: { buffer: Buffer; mimeType: string };
+
+      try {
+        // Try processed image first
+        downloadResult = await downloadImageFromUrl(primaryUrl);
+      } catch (primaryErr) {
+        // Fallback to original image if processed download fails
+        if (fallbackUrl) {
+          console.warn(`[DriveUpload] Processed image failed, falling back to original: ${fallbackUrl}`);
+          downloadResult = await downloadImageFromUrl(fallbackUrl);
+        } else {
+          throw primaryErr;
+        }
+      }
+
+      const { buffer, mimeType } = downloadResult;
 
       // File name: 1_SKU.jpg, 2_SKU.jpg, etc.
-      const ext = getExtensionFromMimeOrUrl(mimeType, imageUrl);
+      const ext = getExtensionFromMimeOrUrl(mimeType, primaryUrl);
       const uploadFileName = `${i + 1}_${sku}.${ext}`;
 
       // Upload to Drive
+      console.log(`[DriveUpload] Uploading ${uploadFileName} (${(buffer.length / 1024).toFixed(0)} KB) to Drive...`);
       const result = await uploadFile(uploadFileName, mimeType, buffer, folder.id);
 
       // Make file publicly accessible
       await makeFilePublic(result.id);
 
       uploadedFiles.push(result);
-      console.log(`[DriveUpload] Uploaded: ${result.name}`);
+      console.log(`[DriveUpload] Uploaded: ${result.name} (${result.id})`);
     } catch (error) {
       console.error(`[DriveUpload] Failed to upload ${image.filename}:`, error);
       // Continue with remaining images instead of aborting the entire upload
     }
+  }
+
+  // Validate that at least some images were uploaded
+  if (uploadedFiles.length === 0 && sortedImages.length > 0) {
+    throw new Error(`Drive upload failed: 0 of ${sortedImages.length} images uploaded. Folder created but empty.`);
   }
 
   // Add product data to Google Sheets

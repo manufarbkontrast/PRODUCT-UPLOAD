@@ -1,12 +1,12 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { getImagePromptForCategory, getImageSpecsForCategory } from '@/config/image-processing';
+import { getImagePromptForCategory } from '@/config/image-processing';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
 export interface GeminiProcessResult {
-  imageBuffer: Buffer;
-  mimeType: string;
-  format: string;
+  readonly imageBuffer: Buffer;
+  readonly mimeType: string;
+  readonly format: string;
 }
 
 /**
@@ -24,7 +24,6 @@ export async function processImageWithGemini(
   }
 
   const prompt = getImagePromptForCategory(category);
-  const specs = getImageSpecsForCategory(category);
 
   // 1. Download the original image
   console.log(`[Gemini] Downloading image: ${imageUrl}`);
@@ -40,7 +39,7 @@ export async function processImageWithGemini(
   // Convert to base64 for Gemini API
   const base64Image = imageBuffer.toString('base64');
 
-  console.log(`[Gemini] Processing with category: ${category}, format: ${specs.format}`);
+  console.log(`[Gemini] Processing with category: ${category}`);
   console.log(`[Gemini] Image size: ${(imageBuffer.length / 1024).toFixed(0)} KB`);
 
   // 2. Call Gemini Flash with image editing
@@ -98,50 +97,28 @@ export async function processImageWithGemini(
     throw new Error('Gemini returned no image data. The model may not have been able to process this image.');
   }
 
+  // 4. Return Gemini output directly (no Sharp post-processing)
   const processedBuffer = Buffer.from(processedImageData, 'base64');
-  console.log(`[Gemini] Processed image size: ${(processedBuffer.length / 1024).toFixed(0)} KB`);
+  const format = mimeToFormat(processedMimeType);
 
-  // 4. Post-process with Sharp if needed (resize, format conversion)
-  const sharp = (await import('sharp')).default;
-  let sharpPipeline = sharp(processedBuffer);
+  console.log(`[Gemini] Processed image: ${(processedBuffer.length / 1024).toFixed(0)} KB, ${processedMimeType}`);
 
-  if (specs.format === 'webp') {
-    // Shoes & Accessories: WebP, max 2000x2000
-    const maxDim = 'maxWidth' in specs ? specs.maxWidth : 2000;
-    sharpPipeline = sharpPipeline
-      .resize({
-        width: maxDim,
-        height: maxDim,
-        fit: 'inside',
-        withoutEnlargement: true,
-      })
-      .webp({ quality: specs.quality });
+  return {
+    imageBuffer: processedBuffer,
+    mimeType: processedMimeType,
+    format,
+  };
+}
 
-    const outputBuffer = await sharpPipeline.toBuffer();
-    return {
-      imageBuffer: outputBuffer,
-      mimeType: 'image/webp',
-      format: 'webp',
-    };
-  } else {
-    // Clothing: JPG, 1801x2600 (Zalando)
-    const targetWidth = 'targetWidth' in specs ? specs.targetWidth : 1801;
-    const targetHeight = 'targetHeight' in specs ? specs.targetHeight : 2600;
-
-    sharpPipeline = sharpPipeline
-      .resize({
-        width: targetWidth,
-        height: targetHeight,
-        fit: 'contain',
-        background: { r: 255, g: 255, b: 255, alpha: 1 },
-      })
-      .jpeg({ quality: specs.quality });
-
-    const outputBuffer = await sharpPipeline.toBuffer();
-    return {
-      imageBuffer: outputBuffer,
-      mimeType: 'image/jpeg',
-      format: 'jpg',
-    };
-  }
+/**
+ * Map MIME type to file extension
+ */
+function mimeToFormat(mimeType: string): string {
+  const mapping: Record<string, string> = {
+    'image/png': 'png',
+    'image/jpeg': 'jpg',
+    'image/webp': 'webp',
+    'image/gif': 'gif',
+  };
+  return mapping[mimeType] || 'png';
 }

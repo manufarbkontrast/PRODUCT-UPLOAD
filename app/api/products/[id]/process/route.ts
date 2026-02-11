@@ -75,16 +75,17 @@ export async function POST(
     }
 
     if (useDirectProcessing) {
-      // Direkte Verarbeitung: Gemini + Sharp direkt aufrufen (kein HTTP Self-Call)
+      // Direkte Verarbeitung: Gemini direkt aufrufen (kein HTTP Self-Call)
+      const startTime = Date.now();
+
       for (const img of product.images) {
         const imageUrl = img.original_path.startsWith('http')
           ? img.original_path
           : supabase.storage.from('product-images').getPublicUrl(img.original_path).data.publicUrl;
 
         try {
-          console.log(`[Process] Verarbeite Bild ${img.id} direkt mit Gemini...`);
+          console.log(`[Process] Verarbeite Bild ${img.id} mit Gemini...`);
 
-          // Gemini + Sharp direkt aufrufen
           const processed = await processImageWithGemini(imageUrl, product.category);
 
           // Upload verarbeitetes Bild zu Supabase Storage
@@ -107,6 +108,12 @@ export async function POST(
             .from('processed-images')
             .getPublicUrl(storagePath);
 
+          // Verify the URL is accessible before saving
+          const verifyRes = await fetch(urlData.publicUrl, { method: 'HEAD' }).catch(() => null);
+          if (!verifyRes || !verifyRes.ok) {
+            console.warn(`[Process] Processed URL not reachable, but continuing: ${urlData.publicUrl}`);
+          }
+
           await supabase
             .from('product_images')
             .update({
@@ -115,7 +122,7 @@ export async function POST(
             })
             .eq('id', img.id);
 
-          console.log(`[Process] Bild ${img.id} erfolgreich verarbeitet`);
+          console.log(`[Process] Bild ${img.id} erfolgreich verarbeitet (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
         } catch (err) {
           console.error(`[Process] Fehler bei Bild ${img.id}:`, err);
           await supabase
@@ -124,6 +131,8 @@ export async function POST(
             .eq('id', img.id);
         }
       }
+
+      const elapsedSeconds = (Date.now() - startTime) / 1000;
 
       // Produkt-Status aktualisieren
       const { data: updatedImages } = await supabase
@@ -149,7 +158,27 @@ export async function POST(
         });
       }
 
+      // Check if we have enough time left for Drive upload (need ~25s)
+      const timeLeftSeconds = maxDuration - elapsedSeconds;
+      if (timeLeftSeconds < 25) {
+        console.warn(`[Process] Only ${timeLeftSeconds.toFixed(0)}s left, skipping Drive upload. Frontend should trigger /upload separately.`);
+        await supabase
+          .from('products')
+          .update({ status: 'processed' })
+          .eq('id', id);
+
+        return NextResponse.json({
+          status: 'processed',
+          imageCount: product.images.length,
+          processedCount: doneImages.length,
+          imageType,
+          specs,
+          message: `${doneImages.length} Bild(er) verarbeitet. Drive-Upload wird separat gestartet.`,
+        });
+      }
+
       // At least some images are done — upload them to Google Drive
+      console.log(`[Process] ${timeLeftSeconds.toFixed(0)}s remaining, starting Drive upload...`);
       await supabase
         .from('products')
         .update({ status: 'uploading' })
