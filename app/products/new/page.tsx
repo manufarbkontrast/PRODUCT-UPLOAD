@@ -88,19 +88,9 @@ export default function NewProductPage() {
         setZalandoAttributes(prev => ({ ...prev, ...newAttrs }));
       }
 
-      const filledFields: string[] = [];
-      if (result.name) filledFields.push('Name');
-      if (result.brandCode || result.brand) filledFields.push('Marke');
-      if (result.colorCode || result.color) filledFields.push('Farbe');
-      if (result.genderCode) filledFields.push('Geschlecht');
-      if (result.description) filledFields.push('Beschreibung');
-      if (result.sku) filledFields.push('SKU');
-      if (result.size) filledFields.push('Größe');
-
-      const sourceInfo = result.source === 'shopify' ? ' (Shopify)' : '';
       setLookupMessage({
         type: 'success',
-        text: `Produktdaten gefunden${sourceInfo}! Vorausgefüllt: ${filledFields.join(', ')}. Bitte Produktart wählen.`,
+        text: 'Produkt gefunden',
       });
     } else {
       // Kein Hinweis nötig - Formular ist bereit zum Ausfüllen
@@ -217,13 +207,21 @@ export default function NewProductPage() {
           <h1 className="text-xl font-semibold">Neues Produkt</h1>
         </div>
 
-        <div className="flex items-center gap-2 text-sm text-zinc-500">
-          <span className="flex items-center justify-center w-5 h-5 rounded-full bg-zinc-900 text-white text-xs dark:bg-white dark:text-zinc-900">1</span>
-          <span>EAN</span>
-          <span className="text-zinc-300 dark:text-zinc-600">{"\u2192"}</span>
-          <span className="text-zinc-400">Daten</span>
-          <span className="text-zinc-300 dark:text-zinc-600">{"\u2192"}</span>
-          <span className="text-zinc-400">Bilder</span>
+        <div className="flex items-center gap-3 text-sm">
+          <div className="flex items-center gap-1.5">
+            <span className="flex items-center justify-center w-6 h-6 rounded-full bg-zinc-900 text-white text-xs font-medium dark:bg-white dark:text-zinc-900">1</span>
+            <span className="font-medium text-zinc-900 dark:text-zinc-100">EAN</span>
+          </div>
+          <div className="w-4 h-px bg-zinc-300 dark:bg-zinc-600" />
+          <div className="flex items-center gap-1.5">
+            <span className="flex items-center justify-center w-6 h-6 rounded-full bg-zinc-200 text-zinc-400 text-xs dark:bg-zinc-700 dark:text-zinc-500">2</span>
+            <span className="text-zinc-400 dark:text-zinc-500">Daten</span>
+          </div>
+          <div className="w-4 h-px bg-zinc-300 dark:bg-zinc-600" />
+          <div className="flex items-center gap-1.5">
+            <span className="flex items-center justify-center w-6 h-6 rounded-full bg-zinc-200 text-zinc-400 text-xs dark:bg-zinc-700 dark:text-zinc-500">3</span>
+            <span className="text-zinc-400 dark:text-zinc-500">Bilder</span>
+          </div>
         </div>
 
         <EanScanner
@@ -253,18 +251,25 @@ export default function NewProductPage() {
         <h1 className="text-xl font-semibold">Produktdaten</h1>
       </div>
 
-      <div className="flex items-center gap-2 text-sm text-zinc-500">
-        <span className="flex items-center justify-center w-5 h-5 rounded-full bg-green-500 text-white text-xs">
-          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-          </svg>
-        </span>
-        <span className="text-zinc-400">EAN</span>
-        <span className="text-zinc-300 dark:text-zinc-600">{"\u2192"}</span>
-        <span className="flex items-center justify-center w-5 h-5 rounded-full bg-zinc-900 text-white text-xs dark:bg-white dark:text-zinc-900">2</span>
-        <span>Daten</span>
-        <span className="text-zinc-300 dark:text-zinc-600">{"\u2192"}</span>
-        <span className="text-zinc-400">Bilder</span>
+      <div className="flex items-center gap-3 text-sm">
+        <div className="flex items-center gap-1.5">
+          <span className="flex items-center justify-center w-6 h-6 rounded-full bg-green-500 text-white">
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+            </svg>
+          </span>
+          <span className="text-green-600 dark:text-green-400">EAN</span>
+        </div>
+        <div className="w-4 h-px bg-zinc-300 dark:bg-zinc-600" />
+        <div className="flex items-center gap-1.5">
+          <span className="flex items-center justify-center w-6 h-6 rounded-full bg-zinc-900 text-white text-xs font-medium dark:bg-white dark:text-zinc-900">2</span>
+          <span className="font-medium text-zinc-900 dark:text-zinc-100">Daten</span>
+        </div>
+        <div className="w-4 h-px bg-zinc-300 dark:bg-zinc-600" />
+        <div className="flex items-center gap-1.5">
+          <span className="flex items-center justify-center w-6 h-6 rounded-full bg-zinc-200 text-zinc-400 text-xs dark:bg-zinc-700 dark:text-zinc-500">3</span>
+          <span className="text-zinc-400 dark:text-zinc-500">Bilder</span>
+        </div>
       </div>
 
       {/* EAN Display */}
