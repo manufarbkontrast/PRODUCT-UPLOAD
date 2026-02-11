@@ -22,6 +22,7 @@ export interface FileInfo {
 
 /**
  * Upload a file to Google Drive.
+ * Supports both regular Drive and Shared Drives (supportsAllDrives).
  */
 export async function uploadFile(
   fileName: string,
@@ -33,6 +34,7 @@ export async function uploadFile(
   const parentId = folderId || await getOrCreateDriveFolderId();
 
   const response = await drive.files.create({
+    supportsAllDrives: true,
     requestBody: {
       name: fileName,
       parents: [parentId],
@@ -75,6 +77,8 @@ export async function listFiles(
   const parentId = folderId || await getOrCreateDriveFolderId();
 
   const response = await drive.files.list({
+    supportsAllDrives: true,
+    includeItemsFromAllDrives: true,
     q: `'${parentId}' in parents and trashed = false`,
     pageSize,
     fields: 'files(id, name, mimeType, size, createdTime, modifiedTime, webViewLink, webContentLink)',
@@ -101,6 +105,7 @@ export async function getFile(fileId: string): Promise<FileInfo | null> {
   try {
     const response = await drive.files.get({
       fileId,
+      supportsAllDrives: true,
       fields: 'id, name, mimeType, size, createdTime, modifiedTime, webViewLink, webContentLink',
     });
 
@@ -126,7 +131,7 @@ export async function downloadFile(fileId: string): Promise<Buffer> {
   const drive = await getDriveClient();
 
   const response = await drive.files.get(
-    { fileId, alt: 'media' },
+    { fileId, alt: 'media', supportsAllDrives: true },
     { responseType: 'arraybuffer' }
   );
 
@@ -140,7 +145,7 @@ export async function deleteFile(fileId: string): Promise<boolean> {
   const drive = await getDriveClient();
 
   try {
-    await drive.files.delete({ fileId });
+    await drive.files.delete({ fileId, supportsAllDrives: true });
     return true;
   } catch {
     return false;
@@ -149,6 +154,7 @@ export async function deleteFile(fileId: string): Promise<boolean> {
 
 /**
  * Create a folder in Google Drive.
+ * Supports both regular Drive and Shared Drives.
  */
 export async function createFolder(
   folderName: string,
@@ -158,6 +164,7 @@ export async function createFolder(
   const parentId = parentFolderId || await getOrCreateDriveFolderId();
 
   const response = await drive.files.create({
+    supportsAllDrives: true,
     requestBody: {
       name: folderName,
       mimeType: 'application/vnd.google-apps.folder',
@@ -176,12 +183,14 @@ export async function createFolder(
 
 /**
  * Make a file publicly accessible.
+ * Supports both regular Drive and Shared Drives.
  */
 export async function makeFilePublic(fileId: string): Promise<void> {
   const drive = await getDriveClient();
 
   await drive.permissions.create({
     fileId,
+    supportsAllDrives: true,
     requestBody: {
       role: 'reader',
       type: 'anyone',
