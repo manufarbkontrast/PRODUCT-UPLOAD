@@ -34,6 +34,30 @@ export async function POST(
       return NextResponse.json({ error: 'Keine Bilder vorhanden' }, { status: 400 });
     }
 
+    // Clean up old processed files before re-processing
+    const alreadyProcessed = product.images.filter(
+      (img: { status: string }) => img.status === 'done' || img.status === 'error'
+    );
+    if (alreadyProcessed.length > 0) {
+      console.log(`[Process] Cleaning up ${alreadyProcessed.length} previously processed images`);
+      for (const img of alreadyProcessed) {
+        if (img.processed_path) {
+          // processed_path is stored as full URL, extract storage path
+          const storagePath = img.processed_path.includes('/processed-images/')
+            ? img.processed_path.split('/processed-images/').pop()
+            : null;
+          if (storagePath) {
+            await supabase.storage.from('processed-images').remove([storagePath]);
+          }
+        }
+      }
+      // Reset all images to pending
+      await supabase
+        .from('product_images')
+        .update({ processed_path: null, status: 'pending' })
+        .eq('product_id', id);
+    }
+
     const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL;
 
     // Prüfe ob n8n erreichbar ist (mit Timeout)
@@ -89,8 +113,8 @@ export async function POST(
           const processed = await processImageWithGemini(imageUrl, product.category);
 
           // Upload verarbeitetes Bild zu Supabase Storage
-          const baseName = img.filename.replace(/\.[^.]+$/, '');
-          const processedFilename = `${baseName}_processed.${processed.format}`;
+          // Use image ID to avoid filename collisions (all uploads may be named "image.jpg")
+          const processedFilename = `${img.id}_processed.${processed.format}`;
           const storagePath = `${id}/${processedFilename}`;
 
           const { error: uploadError } = await supabase.storage

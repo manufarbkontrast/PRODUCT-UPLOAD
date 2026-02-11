@@ -24,10 +24,18 @@ export async function DELETE(
 
     // Delete from Storage
     if (image.original_path) {
-      await supabase.storage.from('product-images').remove([image.original_path]);
+      // original_path is stored as relative path (e.g. "product-id/filename.jpg")
+      const originalStoragePath = image.original_path.includes('/product-images/')
+        ? image.original_path.split('/product-images/').pop()!
+        : image.original_path;
+      await supabase.storage.from('product-images').remove([originalStoragePath]);
     }
     if (image.processed_path) {
-      await supabase.storage.from('processed-images').remove([image.processed_path]);
+      // processed_path is stored as full URL, extract storage path
+      const processedStoragePath = image.processed_path.includes('/processed-images/')
+        ? image.processed_path.split('/processed-images/').pop()!
+        : image.processed_path;
+      await supabase.storage.from('processed-images').remove([processedStoragePath]);
     }
 
     // Delete DB record
