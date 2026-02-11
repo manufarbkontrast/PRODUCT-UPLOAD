@@ -10,7 +10,7 @@ let cachedSpreadsheetId: string | null = null;
 const ROOT_FOLDER_NAME = 'SPZ-Product-Integration';
 const SPREADSHEET_NAME = 'SPZ-Product-Data';
 
-const SHEET_HEADERS = [
+export const SHEET_HEADERS = [
   'Timestamp',
   'Product ID',
   'EAN',

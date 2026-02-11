@@ -7,6 +7,7 @@ export {
   getOrCreateDriveFolderId,
   getOrCreateSpreadsheetId,
   getDefaultSheetName,
+  SHEET_HEADERS,
 } from './setup';
 
 export {

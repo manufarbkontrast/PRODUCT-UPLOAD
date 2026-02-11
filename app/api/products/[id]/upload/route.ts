@@ -80,6 +80,7 @@ export async function POST(
       category: product.category,
       description: product.description,
       sku: product.sku,
+      existingDriveUrl: product.drive_url || null,
       images: imagesWithUrls,
     });
 
