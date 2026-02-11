@@ -55,6 +55,18 @@ export const categoryImageType: Record<string, ImageProcessingType> = {
 // Schuh-Profil: Mit leichtem Schatten
 export const SHOES_PROMPT = `Professional e-commerce product photography with these EXACT specifications:
 
+PRESERVE ORIGINAL COMPOSITION - CRITICAL:
+- EXACT same camera angle as original image - do NOT change
+- EXACT same camera distance to product - do NOT zoom in or out
+- EXACT same viewing side (left/right/front/back) - do NOT rotate product
+- EXACT same product orientation and perspective - do NOT flip or mirror
+- If original shows left side -> keep left side
+- If original shows right side -> keep right side
+- If original shows front -> keep front view
+- If original shows back -> keep back view
+- Camera position relative to product MUST stay identical
+- Product size in frame MUST match original proportions
+
 LIGHTING SETUP:
 - Soft, diffused studio lighting from top-left at 45-degree angle
 - Creates gentle, natural shadow falling to bottom-right
@@ -83,20 +95,38 @@ TECHNICAL REQUIREMENTS:
 - Studio-quality finish optimized for white backgrounds
 
 MAINTAIN ORIGINAL:
-- Image height MUST stay identical to source
-- Only width adjusts to preserve aspect ratio
+- Camera angle MUST stay identical
+- Camera distance MUST stay identical
+- Product viewing side MUST stay identical
 - Product proportions remain accurate
 - No distortion or stretching
+- No rotation, flipping, or perspective changes
+- No zooming in or out
 
 OUTPUT STYLE:
 - Clean, minimal aesthetic
 - Focus on product details and materials
 - Professional e-commerce standard
 - Optimized for website product pages
-- No people, hands, or styling props visible`;
+- No people, hands, or styling props visible
 
-// Accessoires-Profil: Für Taschen, Rucksäcke, Gürtel etc.
-export const ACCESSORIES_PROMPT = `Professional e-commerce product photography for accessories (bags, backpacks, wallets, belts) with these EXACT specifications:
+TRANSFORM ONLY: lighting quality, background to pure white/light gray, centering, add subtle shadow
+NEVER CHANGE: camera position, viewing angle, product orientation, zoom level`;
+
+// Accessoires-Profil: Für Taschen, Rucksäcke, Gürtel, Mützen etc.
+export const ACCESSORIES_PROMPT = `Professional e-commerce product photography for accessories (bags, backpacks, wallets, belts, hats, beanies) with these EXACT specifications:
+
+PRESERVE ORIGINAL COMPOSITION - CRITICAL:
+- EXACT same camera angle as original image - do NOT change
+- EXACT same camera distance to product - do NOT zoom in or out
+- EXACT same viewing side (left/right/front/back) - do NOT rotate product
+- EXACT same product orientation and perspective - do NOT flip or mirror
+- If original shows front of product -> keep front view
+- If original shows back of product -> keep back view
+- If original shows side of product -> keep side view
+- Camera position relative to product MUST stay identical
+- Product size in frame MUST match original proportions
+- Do NOT reinterpret or "improve" the viewing angle
 
 LIGHTING SETUP:
 - Soft, diffused studio lighting from multiple angles
@@ -113,8 +143,7 @@ BACKGROUND & COMPOSITION:
 - Horizontal and vertical centering
 
 PRODUCT POSITIONING:
-- Product positioned at natural viewing angle
-- Show best side/angle of the product
+- Keep product at EXACT same angle as original photo
 - Maintain realistic proportions
 - Subtle contact shadow for grounding
 
@@ -126,9 +155,13 @@ TECHNICAL REQUIREMENTS:
 - Details like zippers, buckles, stitching clearly visible
 
 MAINTAIN ORIGINAL:
-- Camera angle should show product at its best
+- Camera angle MUST stay identical
+- Camera distance MUST stay identical
+- Product viewing side MUST stay identical
 - Product proportions remain accurate
 - No distortion or stretching
+- No rotation, flipping, or perspective changes
+- No zooming in or out
 - Material textures preserved
 
 OUTPUT STYLE:
@@ -136,7 +169,10 @@ OUTPUT STYLE:
 - Focus on product craftsmanship and details
 - Professional e-commerce standard
 - Square or near-square aspect ratio preferred
-- No people, hands, or styling props visible`;
+- No people, hands, or styling props visible
+
+TRANSFORM ONLY: lighting quality, background to pure white, centering, add subtle shadow
+NEVER CHANGE: camera position, viewing angle, product orientation, zoom level`;
 
 // Kleidung-Profil: Zalando-Standard, komplett schattenlos
 export const CLOTHING_PROMPT = `Professional e-commerce product photography optimized for Zalando visualization standards with these EXACT specifications:
