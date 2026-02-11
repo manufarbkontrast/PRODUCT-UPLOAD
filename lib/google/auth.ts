@@ -212,26 +212,33 @@ export async function getGoogleAuth() {
 /**
  * Get Google Auth specifically for Drive operations.
  * Prefers OAuth2 (user has storage quota) over Service Account (0 GB quota).
- * Falls back to Service Account if OAuth2 is not available.
+ * Falls back to Service Account if OAuth2 is not available or invalid.
  */
 async function getGoogleAuthForDrive() {
-  // 1. OAuth2 first — user has storage quota, service accounts do NOT
+  // 1. Try OAuth2 first — user has storage quota, service accounts do NOT
   if (useOAuth2) {
     const tokens = loadSavedTokens();
     if (tokens && tokens.refresh_token) {
-      console.log('[Auth] Using OAuth2 for Drive (user has storage quota)');
-      const oauth2Client = getOAuth2Client();
-      oauth2Client.setCredentials(tokens);
-      oauth2Client.on('tokens', (newTokens) => {
-        const updatedTokens = { ...tokens, ...newTokens };
-        persistTokensToFile(updatedTokens);
-      });
-      return oauth2Client;
+      try {
+        const oauth2Client = getOAuth2Client();
+        oauth2Client.setCredentials(tokens);
+        // Validate by requesting a fresh access token
+        const { credentials } = await oauth2Client.refreshAccessToken();
+        oauth2Client.setCredentials(credentials);
+        oauth2Client.on('tokens', (newTokens) => {
+          const updatedTokens = { ...tokens, ...newTokens };
+          persistTokensToFile(updatedTokens);
+        });
+        console.log('[Auth] Using OAuth2 for Drive (user has storage quota)');
+        return oauth2Client;
+      } catch (oauthError) {
+        console.warn('[Auth] OAuth2 token refresh failed, falling back to Service Account:', oauthError);
+      }
     }
   }
 
-  // 2. Fall back to Service Account (may fail for file uploads due to quota)
-  console.warn('[Auth] No OAuth2 tokens available for Drive, falling back to Service Account (may lack quota)');
+  // 2. Fall back to Service Account
+  console.log('[Auth] Using Service Account for Drive');
   return getGoogleAuth();
 }
 
