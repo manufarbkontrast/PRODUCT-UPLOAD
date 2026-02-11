@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase/server';
 import { uploadProductToDrive } from '@/lib/google';
 
+export const maxDuration = 60;
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -28,12 +30,12 @@ export async function POST(
       return NextResponse.json({ error: 'Keine Bilder vorhanden' }, { status: 400 });
     }
 
-    // Check if any images have been processed (or at least uploaded)
-    const hasProcessedImages = product.images.some(
-      (img: Record<string, unknown>) => img.processed_path || img.original_path
+    // Only upload images that have been processed (status: done) or at least have an original
+    const uploadableImages = product.images.filter(
+      (img: Record<string, unknown>) => img.status === 'done' || img.original_path
     );
-    if (!hasProcessedImages) {
-      return NextResponse.json({ error: 'Bilder müssen erst verarbeitet werden' }, { status: 400 });
+    if (uploadableImages.length === 0) {
+      return NextResponse.json({ error: 'Keine uploadbaren Bilder vorhanden' }, { status: 400 });
     }
 
     // Update status to uploading
@@ -42,27 +44,32 @@ export async function POST(
       .update({ status: 'uploading' })
       .eq('id', id);
 
-    console.log(`Starting upload for product ${id}: ${product.name}`);
+    console.log(`[Upload] Starting upload for product ${id}: ${product.name} (${uploadableImages.length} images)`);
 
-    // Get public URLs for images from Supabase Storage
-    const imagesWithUrls = product.images.map((img: Record<string, unknown>) => {
-      const path = (img.processed_path || img.original_path) as string;
-      const bucket = img.processed_path ? 'processed-images' : 'product-images';
+    // Build image URLs with proper originalPath and processedPath separation
+    const resolveUrl = (path: string, bucket: string): string => {
+      if (path.startsWith('http')) return path;
+      return supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl;
+    };
 
-      // Check if path is already a full URL
-      const isFullUrl = path.startsWith('http');
-      const imageUrl = isFullUrl
-        ? path
-        : supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl;
+    const imagesWithUrls = uploadableImages.map((img: Record<string, unknown>) => {
+      const originalUrl = resolveUrl(img.original_path as string, 'product-images');
+      const processedUrl = img.processed_path
+        ? resolveUrl(img.processed_path as string, 'processed-images')
+        : null;
 
       return {
         id: img.id as string,
-        originalPath: imageUrl,
-        processedPath: img.processed_path ? imageUrl : null,
+        originalPath: originalUrl,
+        processedPath: processedUrl,
         filename: img.filename as string,
-        sortOrder: img.sort_order as number,
+        sortOrder: (img.sort_order as number) ?? 0,
       };
     });
+
+    for (const imgInfo of imagesWithUrls) {
+      console.log(`[Upload] Image ${imgInfo.id}: processed=${!!imgInfo.processedPath}, original=${imgInfo.originalPath.substring(0, 80)}`);
+    }
 
     // Upload to Google Drive and add to Sheets
     const uploadResult = await uploadProductToDrive({
@@ -87,8 +94,7 @@ export async function POST(
       .select()
       .single();
 
-    console.log(`Upload complete for product ${id}`);
-    console.log(`Folder URL: ${uploadResult.folderUrl}`);
+    console.log(`[Upload] Complete for product ${id}: ${uploadResult.folderUrl}`);
 
     return NextResponse.json({
       success: true,
@@ -102,15 +108,18 @@ export async function POST(
       })),
     });
   } catch (error) {
-    console.error(`POST /api/products/${id}/upload error:`, error);
+    console.error(`[Upload] POST /api/products/${id}/upload error:`, error);
 
-    // Reset status on error
-    const supabase = createServerClient();
-    await supabase
-      .from('products')
-      .update({ status: 'error' })
-      .eq('id', id)
-      .then(() => {});
+    // Set status to drive_error (not generic error) so frontend can offer retry
+    try {
+      const supabase = createServerClient();
+      await supabase
+        .from('products')
+        .update({ status: 'drive_error' })
+        .eq('id', id);
+    } catch {
+      // ignore cleanup errors
+    }
 
     return NextResponse.json(
       {
