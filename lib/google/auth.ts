@@ -209,8 +209,34 @@ export async function getGoogleAuth() {
   );
 }
 
+/**
+ * Get Google Auth specifically for Drive operations.
+ * Prefers OAuth2 (user has storage quota) over Service Account (0 GB quota).
+ * Falls back to Service Account if OAuth2 is not available.
+ */
+async function getGoogleAuthForDrive() {
+  // 1. OAuth2 first — user has storage quota, service accounts do NOT
+  if (useOAuth2) {
+    const tokens = loadSavedTokens();
+    if (tokens && tokens.refresh_token) {
+      console.log('[Auth] Using OAuth2 for Drive (user has storage quota)');
+      const oauth2Client = getOAuth2Client();
+      oauth2Client.setCredentials(tokens);
+      oauth2Client.on('tokens', (newTokens) => {
+        const updatedTokens = { ...tokens, ...newTokens };
+        persistTokensToFile(updatedTokens);
+      });
+      return oauth2Client;
+    }
+  }
+
+  // 2. Fall back to Service Account (may fail for file uploads due to quota)
+  console.warn('[Auth] No OAuth2 tokens available for Drive, falling back to Service Account (may lack quota)');
+  return getGoogleAuth();
+}
+
 export async function getDriveClient() {
-  const auth = await getGoogleAuth();
+  const auth = await getGoogleAuthForDrive();
   return google.drive({ version: 'v3', auth });
 }
 
@@ -226,34 +252,30 @@ export function getAuthStatus(): {
   method: 'oauth2' | 'service_account' | 'none';
   configured: boolean;
   ready: boolean;
+  driveAuth: 'oauth2' | 'service_account' | 'none';
+  sheetsAuth: 'service_account' | 'oauth2' | 'none';
   authUrl?: string;
 } {
-  // Mirror the same priority as getGoogleAuth(): Service Account first
   const hasEnvServiceAccount = !!loadServiceAccountFromEnv();
   const hasFileServiceAccount = serviceAccountFileExists();
+  const hasServiceAccount = hasEnvServiceAccount || hasFileServiceAccount;
 
-  if (hasEnvServiceAccount || hasFileServiceAccount) {
-    return {
-      method: 'service_account',
-      configured: true,
-      ready: true,
-    };
-  }
+  const tokens = useOAuth2 ? loadSavedTokens() : null;
+  const hasOAuth2 = !!(tokens && tokens.refresh_token);
 
-  if (useOAuth2) {
-    const tokens = loadSavedTokens();
-    const ready = !!(tokens && tokens.refresh_token);
-    return {
-      method: 'oauth2',
-      configured: true,
-      ready,
-      authUrl: ready ? undefined : getAuthUrl(),
-    };
-  }
+  // Drive prefers OAuth2 (user has quota), Sheets uses Service Account
+  const driveAuth = hasOAuth2 ? 'oauth2' : hasServiceAccount ? 'service_account' : 'none';
+  const sheetsAuth = hasServiceAccount ? 'service_account' : hasOAuth2 ? 'oauth2' : 'none';
+
+  const configured = hasServiceAccount || hasOAuth2;
+  const ready = driveAuth !== 'none' && sheetsAuth !== 'none';
 
   return {
-    method: 'none',
-    configured: false,
-    ready: false,
+    method: hasServiceAccount ? 'service_account' : hasOAuth2 ? 'oauth2' : 'none',
+    configured,
+    ready,
+    driveAuth,
+    sheetsAuth,
+    authUrl: hasOAuth2 ? undefined : (useOAuth2 ? getAuthUrl() : undefined),
   };
 }
