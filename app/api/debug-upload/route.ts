@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase/server';
 import { createFolder, uploadFile, makeFilePublic } from '@/lib/google/drive';
-import { getGoogleAuth } from '@/lib/google/auth';
+import { getGoogleAuth, getOAuth2Client, loadSavedTokens } from '@/lib/google/auth';
 
 export const maxDuration = 60;
 
@@ -21,6 +21,34 @@ export async function GET(request: NextRequest) {
     result.authType = auth.constructor.name;
   } catch (err) {
     result.authError = err instanceof Error ? err.message : String(err);
+  }
+
+  // Test OAuth2 token refresh
+  result.oauth2Test = {};
+  try {
+    const tokens = loadSavedTokens();
+    if (tokens && tokens.refresh_token) {
+      (result.oauth2Test as Record<string, unknown>).hasRefreshToken = true;
+      (result.oauth2Test as Record<string, unknown>).tokenExpiryDate = tokens.expiry_date
+        ? new Date(tokens.expiry_date).toISOString()
+        : 'unknown';
+      try {
+        const oauth2Client = getOAuth2Client();
+        oauth2Client.setCredentials(tokens);
+        const { credentials } = await oauth2Client.refreshAccessToken();
+        (result.oauth2Test as Record<string, unknown>).refreshSuccess = true;
+        (result.oauth2Test as Record<string, unknown>).newExpiry = credentials.expiry_date
+          ? new Date(credentials.expiry_date).toISOString()
+          : 'unknown';
+      } catch (refreshErr) {
+        (result.oauth2Test as Record<string, unknown>).refreshSuccess = false;
+        (result.oauth2Test as Record<string, unknown>).refreshError = refreshErr instanceof Error ? refreshErr.message : String(refreshErr);
+      }
+    } else {
+      (result.oauth2Test as Record<string, unknown>).hasRefreshToken = false;
+    }
+  } catch (err) {
+    (result.oauth2Test as Record<string, unknown>).error = err instanceof Error ? err.message : String(err);
   }
 
   // Get service account email from env

@@ -271,6 +271,7 @@ export function getAuthStatus(): {
   const hasOAuth2 = !!(tokens && tokens.refresh_token);
 
   // Drive prefers OAuth2 (user has quota), Sheets uses Service Account
+  // Note: driveAuth shows 'oauth2' only when tokens exist; actual validity checked at runtime
   const driveAuth = hasOAuth2 ? 'oauth2' : hasServiceAccount ? 'service_account' : 'none';
   const sheetsAuth = hasServiceAccount ? 'service_account' : hasOAuth2 ? 'oauth2' : 'none';
 
