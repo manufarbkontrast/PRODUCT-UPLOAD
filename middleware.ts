@@ -12,7 +12,7 @@ const PUBLIC_PATHS = [
   '/favicon.ico',
 ];
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Public paths durchlassen
@@ -30,10 +30,13 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Session pruefen
+  // Session pruefen (verifySessionToken is async — uses Web Crypto API)
   const sessionCookie = request.cookies.get('spz-session');
+  const session = sessionCookie?.value
+    ? await verifySessionToken(sessionCookie.value)
+    : null;
 
-  if (!sessionCookie?.value || !verifySessionToken(sessionCookie.value)) {
+  if (!session) {
     // API-Requests bekommen 401
     if (pathname.startsWith('/api/')) {
       return NextResponse.json({ error: 'Nicht eingeloggt' }, { status: 401 });

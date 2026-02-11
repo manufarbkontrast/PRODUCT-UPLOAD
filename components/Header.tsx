@@ -9,7 +9,7 @@ import { useAuth } from '@/contexts/AuthContext';
 export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
   const { isMobile } = useViewMode();
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
   const pathname = usePathname();
 
   const isActive = (path: string) => pathname === path;
@@ -49,9 +49,15 @@ export default function Header() {
                 + Neu
               </Link>
 
+              {user && (
+                <span className="ml-2 text-xs text-zinc-400 dark:text-zinc-500">
+                  {user.displayName}
+                </span>
+              )}
+
               <button
                 onClick={logout}
-                className="ml-3 p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+                className="ml-1 p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
                 title="Abmelden"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -104,12 +110,19 @@ export default function Header() {
               >
                 + Neues Produkt
               </Link>
-              <button
-                onClick={() => { setMenuOpen(false); logout(); }}
-                className="px-3 py-2.5 rounded-lg text-sm text-left text-zinc-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 mt-1"
-              >
-                Abmelden
-              </button>
+              <div className="flex items-center justify-between px-3 py-2.5 mt-2 border-t border-zinc-100 dark:border-zinc-800">
+                {user && (
+                  <span className="text-xs text-zinc-400 dark:text-zinc-500">
+                    {user.displayName}
+                  </span>
+                )}
+                <button
+                  onClick={() => { setMenuOpen(false); logout(); }}
+                  className="text-sm text-zinc-400 hover:text-red-600 dark:hover:text-red-400"
+                >
+                  Abmelden
+                </button>
+              </div>
             </div>
           </nav>
         )}
