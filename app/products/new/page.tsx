@@ -103,10 +103,8 @@ export default function NewProductPage() {
         text: `Produktdaten gefunden${sourceInfo}! Vorausgefüllt: ${filledFields.join(', ')}. Bitte Produktart wählen.`,
       });
     } else {
-      setLookupMessage({
-        type: 'warning',
-        text: 'Produkt nicht in Shopify gefunden. Bitte manuell ausfüllen.',
-      });
+      // Kein Hinweis nötig - Formular ist bereit zum Ausfüllen
+      setLookupMessage(null);
     }
 
     // Immer zum Details-Step wechseln
@@ -222,9 +220,9 @@ export default function NewProductPage() {
         <div className="flex items-center gap-2 text-sm text-zinc-500">
           <span className="flex items-center justify-center w-5 h-5 rounded-full bg-zinc-900 text-white text-xs dark:bg-white dark:text-zinc-900">1</span>
           <span>EAN</span>
-          <span className="text-zinc-300 dark:text-zinc-700">&rarr;</span>
+          <span className="text-zinc-300 dark:text-zinc-600">{"\u2192"}</span>
           <span className="text-zinc-400">Daten</span>
-          <span className="text-zinc-300 dark:text-zinc-700">&rarr;</span>
+          <span className="text-zinc-300 dark:text-zinc-600">{"\u2192"}</span>
           <span className="text-zinc-400">Bilder</span>
         </div>
 
@@ -256,12 +254,16 @@ export default function NewProductPage() {
       </div>
 
       <div className="flex items-center gap-2 text-sm text-zinc-500">
-        <span className="flex items-center justify-center w-5 h-5 rounded-full bg-green-500 text-white text-xs">&check;</span>
+        <span className="flex items-center justify-center w-5 h-5 rounded-full bg-green-500 text-white text-xs">
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+          </svg>
+        </span>
         <span className="text-zinc-400">EAN</span>
-        <span className="text-zinc-300 dark:text-zinc-700">&rarr;</span>
+        <span className="text-zinc-300 dark:text-zinc-600">{"\u2192"}</span>
         <span className="flex items-center justify-center w-5 h-5 rounded-full bg-zinc-900 text-white text-xs dark:bg-white dark:text-zinc-900">2</span>
         <span>Daten</span>
-        <span className="text-zinc-300 dark:text-zinc-700">&rarr;</span>
+        <span className="text-zinc-300 dark:text-zinc-600">{"\u2192"}</span>
         <span className="text-zinc-400">Bilder</span>
       </div>
 
