@@ -3,62 +3,33 @@
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
+const PIN_LENGTH = 4;
+
 export default function LoginPage() {
   const router = useRouter();
   const [username, setUsername] = useState('');
-  const [pin, setPin] = useState(['', '', '', '']);
+  const [pin, setPin] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState<'username' | 'pin'>('username');
-  const pinRefs = [
-    useRef<HTMLInputElement>(null),
-    useRef<HTMLInputElement>(null),
-    useRef<HTMLInputElement>(null),
-    useRef<HTMLInputElement>(null),
-  ];
+  const pinInputRef = useRef<HTMLInputElement>(null);
   const usernameRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    usernameRef.current?.focus();
-  }, []);
-
-  useEffect(() => {
-    if (step === 'pin') {
-      pinRefs[0].current?.focus();
+    if (step === 'username') {
+      // Small delay to ensure DOM is ready on mobile
+      setTimeout(() => usernameRef.current?.focus(), 100);
     }
   }, [step]);
 
-  const handlePinChange = (index: number, value: string) => {
-    if (!/^\d*$/.test(value)) return;
-
-    const newPin = [...pin];
-    newPin[index] = value.slice(-1);
-    setPin(newPin);
-    setError('');
-
-    // Zum naechsten Feld springen
-    if (value && index < 3) {
-      pinRefs[index + 1].current?.focus();
+  useEffect(() => {
+    if (step === 'pin') {
+      setTimeout(() => pinInputRef.current?.focus(), 100);
     }
+  }, [step]);
 
-    // Auto-Submit wenn alle 4 Ziffern eingegeben
-    if (value && index === 3) {
-      const fullPin = [...newPin.slice(0, 3), value.slice(-1)].join('');
-      if (fullPin.length === 4) {
-        handleLogin(fullPin);
-      }
-    }
-  };
-
-  const handlePinKeyDown = (index: number, e: React.KeyboardEvent) => {
-    if (e.key === 'Backspace' && !pin[index] && index > 0) {
-      pinRefs[index - 1].current?.focus();
-    }
-  };
-
-  const handleLogin = async (pinValue?: string) => {
-    const finalPin = pinValue || pin.join('');
-    if (!username.trim() || finalPin.length !== 4) return;
+  const handleLogin = async (pinValue: string) => {
+    if (!username.trim() || pinValue.length !== PIN_LENGTH) return;
 
     setLoading(true);
     setError('');
@@ -67,7 +38,7 @@ export default function LoginPage() {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: username.trim(), pin: finalPin }),
+        body: JSON.stringify({ username: username.trim(), pin: pinValue }),
       });
 
       if (res.ok) {
@@ -75,8 +46,8 @@ export default function LoginPage() {
         router.refresh();
       } else {
         setError('Falscher Benutzername oder PIN');
-        setPin(['', '', '', '']);
-        pinRefs[0].current?.focus();
+        setPin('');
+        setTimeout(() => pinInputRef.current?.focus(), 100);
       }
     } catch {
       setError('Verbindungsfehler');
@@ -85,11 +56,26 @@ export default function LoginPage() {
     }
   };
 
+  const handlePinInput = (value: string) => {
+    // Only allow digits
+    const digits = value.replace(/\D/g, '').slice(0, PIN_LENGTH);
+    setPin(digits);
+    setError('');
+
+    // Auto-submit when all digits entered
+    if (digits.length === PIN_LENGTH) {
+      handleLogin(digits);
+    }
+  };
+
   const handleUsernameSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!username.trim()) return;
     setStep('pin');
   };
+
+  // Visual PIN dots/digits
+  const pinDigits = Array.from({ length: PIN_LENGTH }, (_, i) => pin[i] || '');
 
   return (
     <div className="min-h-dvh flex flex-col items-center justify-center px-6 bg-white dark:bg-zinc-950">
@@ -125,6 +111,10 @@ export default function LoginPage() {
               />
             </div>
 
+            {error && (
+              <p className="text-sm text-red-600 text-center">{error}</p>
+            )}
+
             <button
               type="submit"
               disabled={!username.trim()}
@@ -142,32 +132,52 @@ export default function LoginPage() {
               <label className="block text-sm font-medium mb-4 text-zinc-700 dark:text-zinc-300 text-center">
                 PIN eingeben
               </label>
-              <div className="flex justify-center gap-3">
-                {pin.map((digit, i) => (
-                  <input
-                    key={i}
-                    ref={pinRefs[i]}
-                    type="tel"
-                    inputMode="numeric"
-                    maxLength={1}
-                    value={digit}
-                    onChange={(e) => handlePinChange(i, e.target.value)}
-                    onKeyDown={(e) => handlePinKeyDown(i, e)}
-                    onFocus={(e) => e.target.select()}
-                    className={`w-16 h-16 text-center text-2xl font-semibold border-2 rounded-xl bg-white dark:bg-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-white transition-colors ${
-                      digit
-                        ? 'border-zinc-900 dark:border-white'
-                        : 'border-zinc-300 dark:border-zinc-700'
-                    } ${error ? 'border-red-500 focus:ring-red-500' : ''}`}
-                    autoComplete="off"
-                  />
-                ))}
+
+              {/* Single hidden input that captures all PIN digits */}
+              <div className="relative">
+                <input
+                  ref={pinInputRef}
+                  type="tel"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={PIN_LENGTH}
+                  value={pin}
+                  onChange={(e) => handlePinInput(e.target.value)}
+                  className="absolute inset-0 w-full h-full opacity-0 z-10 cursor-pointer"
+                  autoComplete="one-time-code"
+                  autoFocus
+                />
+
+                {/* Visual PIN boxes */}
+                <div
+                  className="flex justify-center gap-3"
+                  onClick={() => pinInputRef.current?.focus()}
+                >
+                  {pinDigits.map((digit, i) => (
+                    <div
+                      key={i}
+                      className={`w-16 h-16 flex items-center justify-center text-2xl font-semibold border-2 rounded-xl bg-white dark:bg-zinc-900 transition-colors ${
+                        digit
+                          ? 'border-zinc-900 dark:border-white'
+                          : i === pin.length
+                            ? 'border-zinc-900 dark:border-white ring-2 ring-zinc-900 dark:ring-white'
+                            : 'border-zinc-300 dark:border-zinc-700'
+                      } ${error ? 'border-red-500' : ''}`}
+                    >
+                      {digit ? (
+                        <span className="text-zinc-900 dark:text-white">{'\u2022'}</span>
+                      ) : i === pin.length ? (
+                        <span className="w-0.5 h-6 bg-zinc-900 dark:bg-white animate-pulse" />
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
 
             {/* Error */}
             {error && (
-              <p className="text-sm text-red-600 text-center animate-[shake_0.3s_ease-in-out]">
+              <p className="text-sm text-red-600 text-center">
                 {error}
               </p>
             )}
@@ -183,7 +193,7 @@ export default function LoginPage() {
             )}
 
             <button
-              onClick={() => { setStep('username'); setPin(['', '', '', '']); setError(''); }}
+              onClick={() => { setStep('username'); setPin(''); setError(''); }}
               className="w-full py-2 text-sm text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
             >
               Anderer Benutzer
