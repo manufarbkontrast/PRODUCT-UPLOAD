@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase/server';
+import { createServiceRoleClient } from '@/lib/supabase/server';
 import { processImageWithGemini } from '@/lib/gemini-processor';
 import { validateAdminToken } from '@/lib/admin-auth';
 
@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
     console.log(`[Internal] Uploading to: ${storagePath}`);
 
     // Upload to Supabase Storage
-    const supabase = createServerClient();
+    const supabase = createServiceRoleClient();
     const { error: uploadError } = await supabase.storage
       .from('processed-images')
       .upload(storagePath, processed.imageBuffer, {

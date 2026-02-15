@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase/server';
+import { createServiceRoleClient } from '@/lib/supabase/server';
 import { validateAdminToken } from '@/lib/admin-auth';
 import { uploadProductToDrive } from '@/lib/google';
 
@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = createServerClient();
+    const supabase = createServiceRoleClient();
 
     if (success) {
       // Update image record with processed path

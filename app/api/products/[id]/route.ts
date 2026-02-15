@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase/server';
+import { createServiceRoleClient } from '@/lib/supabase/server';
 
 function resolveStorageUrl(
-  supabase: ReturnType<typeof createServerClient>,
+  supabase: ReturnType<typeof createServiceRoleClient>,
   path: unknown,
   bucket: string
 ): string | null {
@@ -14,7 +14,7 @@ function resolveStorageUrl(
 function mapProduct(
   p: Record<string, unknown>,
   images?: Record<string, unknown>[],
-  supabase?: ReturnType<typeof createServerClient>
+  supabase?: ReturnType<typeof createServiceRoleClient>
 ) {
   return {
     id: p.id,
@@ -51,7 +51,7 @@ export async function GET(
   const { id } = await params;
 
   try {
-    const supabase = createServerClient();
+    const supabase = createServiceRoleClient();
 
     const { data: product, error } = await supabase
       .from('products')
@@ -81,7 +81,7 @@ export async function PATCH(
 
   try {
     const body = await request.json();
-    const supabase = createServerClient();
+    const supabase = createServiceRoleClient();
 
     // Map camelCase to snake_case for Supabase
     const updateData: Record<string, unknown> = {};
@@ -120,7 +120,7 @@ export async function DELETE(
   const { id } = await params;
 
   try {
-    const supabase = createServerClient();
+    const supabase = createServiceRoleClient();
 
     // Delete product images from storage
     const { data: images } = await supabase

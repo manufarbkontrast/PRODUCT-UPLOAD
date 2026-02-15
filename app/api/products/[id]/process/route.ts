@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase/server';
+import { createServiceRoleClient } from '@/lib/supabase/server';
 import { categoryImageType, getImageSpecsForCategory } from '@/config/image-processing';
 import { processImageWithGemini } from '@/lib/gemini-processor';
 
@@ -13,7 +13,7 @@ export async function POST(
   const { id } = await params;
 
   try {
-    const supabase = createServerClient();
+    const supabase = createServiceRoleClient();
 
     // Fetch product with images
     const { data: product, error: productError } = await supabase
@@ -242,7 +242,7 @@ export async function POST(
     console.error(`POST /api/products/${id}/process error:`, error);
 
     try {
-      const supabase = createServerClient();
+      const supabase = createServiceRoleClient();
       await supabase
         .from('products')
         .update({ status: 'error' })

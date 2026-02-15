@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase/server';
+import { createServiceRoleClient } from '@/lib/supabase/server';
 
 export async function POST(
   request: NextRequest,
@@ -8,7 +8,7 @@ export async function POST(
   const { id } = await params;
 
   try {
-    const supabase = createServerClient();
+    const supabase = createServiceRoleClient();
 
     // Check if product exists
     const { data: product, error: productError } = await supabase

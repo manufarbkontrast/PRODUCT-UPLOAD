@@ -1,23 +1,12 @@
 import { NextResponse } from 'next/server';
-import { isAuthenticated, getSession } from '@/lib/auth';
+import { createClient } from '@/lib/supabase/server';
 
 export async function GET() {
-  const authed = await isAuthenticated();
-
-  if (!authed) {
-    return NextResponse.json({ authenticated: false });
-  }
-
-  const session = await getSession();
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
 
   return NextResponse.json({
-    authenticated: true,
-    user: session
-      ? {
-          id: session.userId,
-          username: session.username,
-          displayName: session.displayName,
-        }
-      : null,
+    authenticated: !!user,
+    user: user ? { id: user.id, email: user.email } : null,
   });
 }

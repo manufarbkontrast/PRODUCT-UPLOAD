@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase/server';
+import { createServiceRoleClient } from '@/lib/supabase/server';
 
 export async function GET() {
   try {
-    const supabase = createServerClient();
+    const supabase = createServiceRoleClient();
 
     const { data: products, error } = await supabase
       .from('products')
@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = createServerClient();
+    const supabase = createServiceRoleClient();
     const sanitizedEan = ean?.trim() || null;
 
     // Wenn EAN vorhanden: prüfen ob schon ein Produkt existiert

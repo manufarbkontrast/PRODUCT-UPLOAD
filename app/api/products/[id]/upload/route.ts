@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase/server';
+import { createServiceRoleClient } from '@/lib/supabase/server';
 import { uploadProductToDrive } from '@/lib/google';
 
 export const maxDuration = 60;
@@ -11,7 +11,7 @@ export async function POST(
   const { id } = await params;
 
   try {
-    const supabase = createServerClient();
+    const supabase = createServiceRoleClient();
 
     const { data: product, error: productError } = await supabase
       .from('products')
@@ -112,16 +112,13 @@ export async function POST(
   } catch (error) {
     console.error(`[Upload] POST /api/products/${id}/upload error:`, error);
 
-    // Set status to drive_error (not generic error) so frontend can offer retry
-    try {
-      const supabase = createServerClient();
-      await supabase
-        .from('products')
-        .update({ status: 'drive_error' })
-        .eq('id', id);
-    } catch {
-      // ignore cleanup errors
-    }
+    // Reset status on error
+    const supabase = createServiceRoleClient();
+    await supabase
+      .from('products')
+      .update({ status: 'error' })
+      .eq('id', id)
+      .then(() => {});
 
     return NextResponse.json(
       {

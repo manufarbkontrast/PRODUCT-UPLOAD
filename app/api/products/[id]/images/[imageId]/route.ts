@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase/server';
+import { createServiceRoleClient } from '@/lib/supabase/server';
 
 export async function DELETE(
   request: NextRequest,
@@ -8,7 +8,7 @@ export async function DELETE(
   const { id, imageId } = await params;
 
   try {
-    const supabase = createServerClient();
+    const supabase = createServiceRoleClient();
 
     // Get image record
     const { data: image, error: fetchError } = await supabase
