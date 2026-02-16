@@ -71,7 +71,7 @@ export async function POST(
       console.log(`[Upload] Image ${imgInfo.id}: processed=${!!imgInfo.processedPath}, original=${imgInfo.originalPath.substring(0, 80)}`);
     }
 
-    // Upload to Google Drive and add to Sheets
+    // Upload to Google Drive
     const uploadResult = await uploadProductToDrive({
       id: product.id,
       ean: product.ean,
@@ -103,7 +103,6 @@ export async function POST(
       driveUrl: updatedProduct?.drive_url || uploadResult.folderUrl,
       folderId: uploadResult.folderId,
       uploadedFiles: uploadResult.uploadedFiles.length,
-      sheetRowAdded: uploadResult.sheetRowAdded,
       files: uploadResult.uploadedFiles.map((f) => ({
         name: f.name,
         url: f.webViewLink,

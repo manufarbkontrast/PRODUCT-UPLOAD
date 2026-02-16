@@ -1,138 +1,245 @@
 'use client';
 
-import Link from 'next/link';
-import { useViewMode } from '@/contexts/ViewModeContext';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useRouter } from 'next/navigation';
+import EanScanner from '@/components/EanScanner';
+import type { EanLookupResult } from '@/config/ean-lookup-mappings';
+
+interface RecentProduct {
+  readonly id: string;
+  readonly name: string;
+  readonly ean: string | null;
+  readonly status: string;
+  readonly driveUrl: string | null;
+  readonly createdAt: string;
+  readonly images: readonly { readonly id: string }[];
+}
+
+const STATUS_CONFIG: Record<string, { readonly label: string; readonly color: string }> = {
+  draft: { label: 'Entwurf', color: 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400' },
+  processing: { label: 'Verarbeitung...', color: 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400' },
+  processed: { label: 'Verarbeitet', color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' },
+  uploading: { label: 'Upload...', color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' },
+  uploaded: { label: 'Fertig', color: 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' },
+  error: { label: 'Fehler', color: 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400' },
+  drive_error: { label: 'Drive-Fehler', color: 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400' },
+};
 
 export default function Home() {
-  const { isMobile } = useViewMode();
+  const router = useRouter();
+  const [creating, setCreating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [recentProducts, setRecentProducts] = useState<readonly RecentProduct[]>([]);
+  const [lookupData, setLookupData] = useState<EanLookupResult | null>(null);
+  const [lookupDone, setLookupDone] = useState(false);
+  const [scannedEan, setScannedEan] = useState<string | null>(null);
+  const hasActiveRef = useRef(false);
 
-  if (!isMobile) {
+  const fetchRecentProducts = useCallback(async () => {
+    try {
+      const res = await fetch('/api/products');
+      if (res.ok) {
+        const data = await res.json();
+        setRecentProducts(data.slice(0, 10));
+      }
+    } catch (err) {
+      console.warn('[Home] Failed to fetch recent products:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchRecentProducts();
+  }, [fetchRecentProducts]);
+
+  // Track active products for polling
+  useEffect(() => {
+    hasActiveRef.current = recentProducts.some(
+      (p) => p.status === 'processing' || p.status === 'uploading' || p.status === 'processed'
+    );
+  }, [recentProducts]);
+
+  // Poll for status changes on processing products
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (hasActiveRef.current) {
+        fetchRecentProducts();
+      }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [fetchRecentProducts]);
+
+  const handleEanScan = (ean: string) => {
+    setScannedEan(ean);
+    setLookupDone(false);
+    setLookupData(null);
+    setError(null);
+  };
+
+  const handleLookupResult = useCallback((result: EanLookupResult) => {
+    setLookupData(result);
+    setLookupDone(true);
+  }, []);
+
+  // Create product and redirect to images when both EAN and lookup are done
+  useEffect(() => {
+    if (!scannedEan || !lookupDone || creating) return;
+
+    const createProduct = async () => {
+      setCreating(true);
+      setError(null);
+
+      try {
+        const productData = {
+          ean: scannedEan,
+          name: lookupData?.found && lookupData.name ? lookupData.name : `Produkt ${scannedEan}`,
+          gender: lookupData?.found && lookupData.genderCode ? lookupData.genderCode : 'UNISEX',
+          category: 'standard',
+          zalandoAttributes: buildZalandoAttributes(lookupData),
+        };
+
+        const res = await fetch('/api/products', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(productData),
+        });
+
+        if (!res.ok) {
+          const errorBody = await res.text();
+          console.error('[Home] POST /api/products failed:', res.status, errorBody);
+          throw new Error(
+            res.status === 401
+              ? 'Nicht eingeloggt. Bitte neu einloggen.'
+              : `Fehler beim Erstellen (${res.status})`
+          );
+        }
+
+        const product = await res.json();
+        router.push(`/products/${product.id}/images`);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Fehler beim Erstellen';
+        setError(message);
+        setScannedEan(null);
+        setLookupData(null);
+        setLookupDone(false);
+      } finally {
+        setCreating(false);
+      }
+    };
+
+    createProduct();
+  }, [scannedEan, lookupDone, lookupData, creating, router]);
+
+  const getStatusInfo = (status: string) => {
+    return STATUS_CONFIG[status] ?? { label: status, color: 'bg-zinc-100 text-zinc-600' };
+  };
+
+  // Loading state while creating product
+  if (creating) {
     return (
       <div className="space-y-6">
-        <h1 className="text-2xl font-semibold">Dashboard</h1>
-
-        <div className="grid grid-cols-3 gap-6">
-          <Link
-            href="/products/new"
-            className="flex flex-col items-center justify-center gap-3 p-8 border-2 border-dashed border-zinc-300 rounded-xl hover:border-zinc-900 hover:bg-zinc-50 transition-colors dark:border-zinc-700 dark:hover:border-white dark:hover:bg-zinc-900"
-          >
-            <div className="w-12 h-12 rounded-full bg-zinc-900 text-white flex items-center justify-center dark:bg-white dark:text-zinc-900">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-            </div>
-            <span className="text-sm font-medium">Neues Produkt erstellen</span>
-          </Link>
-
-          <Link
-            href="/products"
-            className="flex flex-col justify-between p-6 border border-zinc-200 rounded-xl hover:bg-zinc-50 transition-colors dark:border-zinc-800 dark:hover:bg-zinc-900"
-          >
-            <div>
-              <div className="w-10 h-10 rounded-lg bg-zinc-100 flex items-center justify-center mb-3 dark:bg-zinc-800">
-                <svg className="w-5 h-5 text-zinc-600 dark:text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                </svg>
-              </div>
-              <p className="text-sm font-medium">Alle Produkte</p>
-              <p className="text-xs text-zinc-500 mt-1">Übersicht und Verwaltung</p>
-            </div>
-            <div className="flex items-center gap-1 mt-4 text-xs text-zinc-400">
-              <span>Öffnen</span>
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </div>
-          </Link>
-
-          <div className="p-6 bg-zinc-50 rounded-xl dark:bg-zinc-900">
-            <p className="text-sm font-medium text-zinc-500 mb-3">So funktioniert&apos;s:</p>
-            <ol className="text-sm text-zinc-600 dark:text-zinc-400 space-y-2">
-              <li className="flex items-center gap-2">
-                <span className="w-5 h-5 rounded-full bg-zinc-200 dark:bg-zinc-700 text-xs flex items-center justify-center flex-shrink-0">1</span>
-                Produktdaten eingeben
-              </li>
-              <li className="flex items-center gap-2">
-                <span className="w-5 h-5 rounded-full bg-zinc-200 dark:bg-zinc-700 text-xs flex items-center justify-center flex-shrink-0">2</span>
-                Bilder hochladen
-              </li>
-              <li className="flex items-center gap-2">
-                <span className="w-5 h-5 rounded-full bg-zinc-200 dark:bg-zinc-700 text-xs flex items-center justify-center flex-shrink-0">3</span>
-                Automatische Bearbeitung
-              </li>
-              <li className="flex items-center gap-2">
-                <span className="w-5 h-5 rounded-full bg-zinc-200 dark:bg-zinc-700 text-xs flex items-center justify-center flex-shrink-0">4</span>
-                Upload zu Google Drive
-              </li>
-            </ol>
+        <div className="text-center py-12">
+          <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
+            <svg className="w-7 h-7 text-zinc-500 animate-spin" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
           </div>
+          <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+            Produkt wird erstellt...
+          </p>
+          <p className="text-xs text-zinc-500 mt-1">
+            Weiterleitung zur Bildaufnahme
+          </p>
         </div>
       </div>
     );
   }
 
-  // ── Mobile Dashboard ──
   return (
-    <div className="space-y-5">
-      {/* Grosser CTA Button */}
-      <Link
-        href="/products/new"
-        className="flex items-center justify-center gap-3 w-full py-4 px-4 bg-zinc-900 text-white rounded-2xl text-base font-medium active:scale-[0.98] transition-transform dark:bg-white dark:text-zinc-900"
-      >
-        <div className="w-8 h-8 rounded-full bg-white/20 dark:bg-zinc-900/20 flex items-center justify-center">
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-        </div>
-        Neues Produkt
-      </Link>
-
-      {/* Quick Actions */}
-      <div className="grid grid-cols-2 gap-3">
-        <Link
-          href="/products"
-          className="flex flex-col items-center gap-2 p-4 border border-zinc-200 rounded-xl active:bg-zinc-50 transition-colors dark:border-zinc-800 dark:active:bg-zinc-900"
-        >
-          <div className="w-10 h-10 rounded-xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
-            <svg className="w-5 h-5 text-zinc-600 dark:text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-            </svg>
-          </div>
-          <span className="text-xs font-medium">Produkte</span>
-        </Link>
-
-        <Link
-          href="/products/new"
-          className="flex flex-col items-center gap-2 p-4 border border-zinc-200 rounded-xl active:bg-zinc-50 transition-colors dark:border-zinc-800 dark:active:bg-zinc-900"
-        >
-          <div className="w-10 h-10 rounded-xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
-            <svg className="w-5 h-5 text-zinc-600 dark:text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
-            </svg>
-          </div>
-          <span className="text-xs font-medium">EAN Scannen</span>
-        </Link>
+    <div className="space-y-6">
+      {/* EAN Scanner */}
+      <div>
+        <h1 className="text-xl font-semibold mb-4">Produkt scannen</h1>
+        <EanScanner
+          onScan={handleEanScan}
+          onLookupResult={handleLookupResult}
+          autoLookup={true}
+        />
       </div>
 
-      {/* Anleitung */}
-      <div className="p-4 bg-zinc-50 rounded-xl dark:bg-zinc-900">
-        <p className="text-xs font-medium text-zinc-500 mb-3">So funktioniert&apos;s:</p>
-        <div className="space-y-2.5">
-          {[
-            { n: '1', text: 'EAN scannen oder eingeben' },
-            { n: '2', text: 'Produktdaten prüfen' },
-            { n: '3', text: 'Fotos aufnehmen' },
-            { n: '4', text: 'Automatische Bearbeitung & Upload' },
-          ].map((step) => (
-            <div key={step.n} className="flex items-center gap-3">
-              <span className="w-6 h-6 rounded-full bg-zinc-200 dark:bg-zinc-700 text-xs flex items-center justify-center flex-shrink-0 font-medium">
-                {step.n}
-              </span>
-              <span className="text-sm text-zinc-600 dark:text-zinc-400">{step.text}</span>
-            </div>
-          ))}
+      {error && (
+        <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 dark:bg-red-900/20 dark:border-red-800 dark:text-red-400">
+          {error}
         </div>
-      </div>
+      )}
+
+      {/* Recent Products Status */}
+      {recentProducts.length > 0 && (
+        <div>
+          <h2 className="text-sm font-medium text-zinc-500 mb-3">Letzte Produkte</h2>
+          <div className="space-y-2">
+            {recentProducts.map((product) => {
+              const statusInfo = getStatusInfo(product.status);
+              return (
+                <button
+                  key={product.id}
+                  onClick={() => router.push(`/products/${product.id}/images`)}
+                  className="flex items-center justify-between w-full p-3 border border-zinc-200 rounded-lg hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900 text-left transition-colors"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium truncate">{product.name}</p>
+                    <p className="text-xs text-zinc-500 mt-0.5">
+                      {product.ean ?? 'Ohne EAN'} · {product.images.length} Bild{product.images.length !== 1 ? 'er' : ''}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 ml-3 flex-shrink-0">
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${statusInfo.color}`}>
+                      {statusInfo.label}
+                    </span>
+                    {product.driveUrl && (
+                      <a
+                        href={product.driveUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-xs text-blue-600 hover:underline dark:text-blue-400"
+                      >
+                        Drive
+                      </a>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
+}
+
+function buildZalandoAttributes(lookupData: EanLookupResult | null): Record<string, string> {
+  if (!lookupData?.found) return {};
+
+  const attrs: Record<string, string> = {};
+
+  if (lookupData.brandCode) {
+    attrs.brand_code = lookupData.brandCode;
+  } else if (lookupData.brand) {
+    attrs.brand_code = lookupData.brand;
+  }
+  if (lookupData.colorCode) {
+    attrs.color_code_primary = lookupData.colorCode;
+  }
+  if (lookupData.material) {
+    attrs.material_upper_material_clothing = lookupData.material;
+  }
+  if (lookupData.sku) {
+    attrs.sku = lookupData.sku;
+  }
+  if (lookupData.size) {
+    attrs.size_codes = lookupData.size;
+  }
+
+  return attrs;
 }

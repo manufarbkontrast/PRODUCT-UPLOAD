@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist } from "next/font/google";
 import "./globals.css";
-import { ViewModeProvider } from "@/contexts/ViewModeContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import AppShell from "@/components/AppShell";
 
@@ -31,9 +30,7 @@ export default function RootLayout({
     <html lang="de">
       <body className={`${geistSans.variable} font-sans antialiased bg-white dark:bg-zinc-950`}>
         <AuthProvider>
-          <ViewModeProvider>
-            <AppShell>{children}</AppShell>
-          </ViewModeProvider>
+          <AppShell>{children}</AppShell>
         </AuthProvider>
       </body>
     </html>

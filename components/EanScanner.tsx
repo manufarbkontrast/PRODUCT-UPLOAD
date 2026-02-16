@@ -212,7 +212,7 @@ export default function EanScanner({ onScan, onSkip, onLookupResult, autoLookup 
                 Produktdaten gefunden!
               </p>
               <p className="text-xs text-zinc-500 mt-1">
-                Formular wird vorausgefüllt...
+                Produkt wird erstellt...
               </p>
             </>
           )}

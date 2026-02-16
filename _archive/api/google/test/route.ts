@@ -1,29 +1,38 @@
 import { NextResponse } from 'next/server';
 import {
   getOrCreateDriveFolderId,
+  getOrCreateSpreadsheetId,
   getAuthStatus,
   getDriveClient,
   listFiles,
+  getSheetInfo,
 } from '@/lib/google';
 
 /**
- * GET: Test Google Drive connection.
- * Auto-creates folder if it doesn't exist.
+ * GET: Test Google Drive + Sheets connection.
+ * Auto-creates folder and spreadsheet if they don't exist.
  */
 export async function GET() {
   try {
     const authStatus = getAuthStatus();
     const driveFolderId = await getOrCreateDriveFolderId();
+    const spreadsheetId = await getOrCreateSpreadsheetId();
     const files = await listFiles(driveFolderId, 10);
+    const sheetInfo = await getSheetInfo();
 
     return NextResponse.json({
       success: true,
       message: 'Google API connection successful!',
       auth: { method: authStatus.method, ready: authStatus.ready },
-      config: { driveFolderId },
+      config: { driveFolderId, spreadsheetId },
       drive: {
         filesCount: files.length,
         files: files.map((f) => ({ id: f.id, name: f.name })),
+      },
+      sheets: {
+        title: sheetInfo.title,
+        sheetsCount: sheetInfo.sheets.length,
+        sheets: sheetInfo.sheets,
       },
     });
   } catch (error) {

@@ -1,4 +1,6 @@
 import { createFolder, uploadFile, makeFilePublic, listFiles, getFile, UploadResult } from './drive';
+import { appendToSheet, findRowByValue, updateRow } from './sheets';
+import { getDefaultSheetName, SHEET_HEADERS, ZALANDO_SHEET_KEYS } from './setup';
 
 export interface ProductUploadData {
   id: string;
@@ -23,6 +25,7 @@ export interface ProductUploadResult {
   folderId: string;
   folderUrl: string;
   uploadedFiles: UploadResult[];
+  sheetRowAdded: boolean;
   folderReused: boolean;
 }
 
@@ -73,6 +76,29 @@ function getExtensionFromMimeOrUrl(mimeType: string, url: string): string {
     return urlExt === 'jpeg' ? 'jpg' : urlExt;
   }
   return 'jpg';
+}
+
+/**
+ * Convert a 1-based column number to a Sheets column letter (1→A, 26→Z, 27→AA, 37→AK).
+ */
+function columnToLetter(col: number): string {
+  let result = '';
+  let n = col;
+  while (n > 0) {
+    n--;
+    result = String.fromCharCode(65 + (n % 26)) + result;
+    n = Math.floor(n / 26);
+  }
+  return result;
+}
+
+/**
+ * Compute the Sheets range string dynamically from SHEET_HEADERS length.
+ * e.g. 37 headers → "Tabellenblatt1!A:AK"
+ */
+function getSheetRange(): string {
+  const lastCol = columnToLetter(SHEET_HEADERS.length);
+  return `${getDefaultSheetName()}!A:${lastCol}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -199,13 +225,80 @@ async function uploadImages(
 }
 
 // ---------------------------------------------------------------------------
+// Sheet update-or-append
+// ---------------------------------------------------------------------------
+
+async function syncToSheet(
+  product: ProductUploadData,
+  folderId: string,
+  folderUrl: string,
+  folderReused: boolean,
+  uploadedFiles: UploadResult[],
+): Promise<boolean> {
+  try {
+    const sheetName = getDefaultSheetName();
+    const range = getSheetRange();
+
+    // When reusing folder, count ALL files in folder (old + new)
+    let totalImageCount: number;
+    let allImageUrls: string;
+    if (folderReused) {
+      const allFiles = await listFiles(folderId);
+      totalImageCount = allFiles.length;
+      allImageUrls = allFiles.map(f => f.webViewLink).join('\n');
+    } else {
+      totalImageCount = uploadedFiles.length;
+      allImageUrls = uploadedFiles.map(f => f.webViewLink).join('\n');
+    }
+
+    // Extract Zalando attribute values in the order defined by ZALANDO_SHEET_KEYS
+    const attrs = product.zalandoAttributes || {};
+    const zalandoCells = ZALANDO_SHEET_KEYS.map(key => attrs[key] || '');
+
+    const rowData = [
+      // ── Produkt-Stammdaten ──
+      new Date().toISOString(),
+      product.id,
+      product.ean || '',
+      product.name,
+      product.gender,
+      product.category,
+      product.description || '',
+      product.sku || '',
+      // ── Zalando-Attribute + Material (26 Spalten) ──
+      ...zalandoCells,
+      // ── Drive / Bilder ──
+      folderUrl,
+      totalImageCount.toString(),
+      allImageUrls,
+    ];
+
+    // Search for existing row by Product ID (column B = index 1)
+    const existingRow = await findRowByValue(product.id, 1, range);
+
+    if (existingRow) {
+      await updateRow(existingRow.rowIndex, rowData, sheetName);
+      console.log(`[DriveUpload] Updated sheet row ${existingRow.rowIndex}`);
+    } else {
+      await appendToSheet([rowData], range);
+      console.log('[DriveUpload] Appended new sheet row');
+    }
+    return true;
+  } catch (error) {
+    console.error('Failed to update Google Sheets:', error);
+    return false;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Main export: uploadProductToDrive
 // ---------------------------------------------------------------------------
 
 /**
- * Upload a product's images to Google Drive.
+ * Upload a product to Google Drive and sync to Google Sheets.
  * - Reuses existing Drive folder when product was already uploaded.
  * - Adds new images alongside existing ones (no deletion).
+ * - Updates the Sheet row instead of creating duplicates.
  */
 export async function uploadProductToDrive(product: ProductUploadData): Promise<ProductUploadResult> {
   const { folderId, folderUrl, reused, startingImageNumber } = await resolveFolder(product);
@@ -216,5 +309,30 @@ export async function uploadProductToDrive(product: ProductUploadData): Promise<
     throw new Error(`Drive upload failed: 0 of ${product.images.length} images uploaded. Folder created but empty.`);
   }
 
-  return { folderId, folderUrl, uploadedFiles, folderReused: reused };
+  const sheetRowAdded = await syncToSheet(product, folderId, folderUrl, reused, uploadedFiles);
+
+  return { folderId, folderUrl, uploadedFiles, sheetRowAdded, folderReused: reused };
+}
+
+// ---------------------------------------------------------------------------
+// Sheet initialisation
+// ---------------------------------------------------------------------------
+
+/**
+ * Initialize the Google Sheet with headers if empty.
+ * Uses the canonical SHEET_HEADERS from setup.ts.
+ */
+export async function initializeProductSheet(): Promise<void> {
+  try {
+    const { readSheet } = await import('./sheets');
+    const existingData = await readSheet(`${getDefaultSheetName()}!A1:A1`);
+
+    if (existingData.length === 0) {
+      const { writeToSheet } = await import('./sheets');
+      await writeToSheet([SHEET_HEADERS], `${getDefaultSheetName()}!A1`);
+      console.log('Sheet headers initialized');
+    }
+  } catch (error) {
+    console.error('Failed to initialize sheet:', error);
+  }
 }

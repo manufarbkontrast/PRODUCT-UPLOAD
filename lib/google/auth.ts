@@ -5,7 +5,6 @@ import * as fs from 'fs';
 
 const SCOPES = [
   'https://www.googleapis.com/auth/drive',
-  'https://www.googleapis.com/auth/spreadsheets',
 ];
 
 const SERVICE_ACCOUNT_PATH = path.join(process.cwd(), 'google-service-account.json');
@@ -247,11 +246,6 @@ export async function getDriveClient() {
   return google.drive({ version: 'v3', auth });
 }
 
-export async function getSheetsClient() {
-  const auth = await getGoogleAuth();
-  return google.sheets({ version: 'v4', auth });
-}
-
 /**
  * Get authentication status.
  */
@@ -260,7 +254,6 @@ export function getAuthStatus(): {
   configured: boolean;
   ready: boolean;
   driveAuth: 'oauth2' | 'service_account' | 'none';
-  sheetsAuth: 'service_account' | 'oauth2' | 'none';
   authUrl?: string;
 } {
   const hasEnvServiceAccount = !!loadServiceAccountFromEnv();
@@ -270,20 +263,17 @@ export function getAuthStatus(): {
   const tokens = useOAuth2 ? loadSavedTokens() : null;
   const hasOAuth2 = !!(tokens && tokens.refresh_token);
 
-  // Drive prefers OAuth2 (user has quota), Sheets uses Service Account
-  // Note: driveAuth shows 'oauth2' only when tokens exist; actual validity checked at runtime
+  // Drive prefers OAuth2 (user has quota) over Service Account
   const driveAuth = hasOAuth2 ? 'oauth2' : hasServiceAccount ? 'service_account' : 'none';
-  const sheetsAuth = hasServiceAccount ? 'service_account' : hasOAuth2 ? 'oauth2' : 'none';
 
   const configured = hasServiceAccount || hasOAuth2;
-  const ready = driveAuth !== 'none' && sheetsAuth !== 'none';
+  const ready = driveAuth !== 'none';
 
   return {
     method: hasServiceAccount ? 'service_account' : hasOAuth2 ? 'oauth2' : 'none',
     configured,
     ready,
     driveAuth,
-    sheetsAuth,
     authUrl: hasOAuth2 ? undefined : (useOAuth2 ? getAuthUrl() : undefined),
   };
 }

@@ -1,20 +1,15 @@
 // Google API Integration
-// Export all Google Drive and Sheets functions
+// Export all Google Drive functions
 
 export { GOOGLE_CONFIG } from './config';
 
 export {
   getOrCreateDriveFolderId,
-  getOrCreateSpreadsheetId,
-  getDefaultSheetName,
-  SHEET_HEADERS,
-  ZALANDO_SHEET_KEYS,
 } from './setup';
 
 export {
   getGoogleAuth,
   getDriveClient,
-  getSheetsClient,
   getOAuth2Client,
   getAuthUrl,
   getTokensFromCode,
@@ -37,22 +32,7 @@ export {
 } from './drive';
 
 export {
-  readSheet,
-  readSheetAsObjects,
-  appendToSheet,
-  writeToSheet,
-  clearSheet,
-  getSheetInfo,
-  createSheet,
-  deleteSheet,
-  findRowByValue,
-  updateRow,
-  type SheetRow,
-} from './sheets';
-
-export {
   uploadProductToDrive,
-  initializeProductSheet,
   type ProductUploadData,
   type ProductUploadResult,
 } from './product-upload';

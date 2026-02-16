@@ -5,24 +5,16 @@ vi.mock('@/lib/google/drive', () => ({
   createFolder: vi.fn(),
   uploadFile: vi.fn(),
   makeFilePublic: vi.fn(),
-}));
-
-vi.mock('@/lib/google/sheets', () => ({
-  appendToSheet: vi.fn(),
-}));
-
-vi.mock('@/lib/google/setup', () => ({
-  getDefaultSheetName: vi.fn(() => 'Produkte'),
+  listFiles: vi.fn(),
+  getFile: vi.fn(),
 }));
 
 import { uploadProductToDrive, type ProductUploadData } from '@/lib/google/product-upload';
 import { createFolder, uploadFile, makeFilePublic } from '@/lib/google/drive';
-import { appendToSheet } from '@/lib/google/sheets';
 
 const mockCreateFolder = vi.mocked(createFolder);
 const mockUploadFile = vi.mocked(uploadFile);
 const mockMakeFilePublic = vi.mocked(makeFilePublic);
-const mockAppendToSheet = vi.mocked(appendToSheet);
 
 function makeProduct(overrides?: Partial<ProductUploadData>): ProductUploadData {
   return {
@@ -81,7 +73,6 @@ beforeEach(() => {
   });
 
   mockMakeFilePublic.mockResolvedValue();
-  mockAppendToSheet.mockResolvedValue();
 
   mockFetchForImages();
 });
@@ -95,7 +86,6 @@ describe('uploadProductToDrive', () => {
     expect(result.folderId).toBe('folder-123');
     expect(result.folderUrl).toBe('https://drive.google.com/drive/folders/folder-123');
     expect(result.uploadedFiles).toHaveLength(2);
-    expect(result.sheetRowAdded).toBe(true);
 
     // Verify folder creation
     expect(mockCreateFolder).toHaveBeenCalledOnce();
@@ -108,7 +98,7 @@ describe('uploadProductToDrive', () => {
     expect(mockMakeFilePublic).toHaveBeenCalledTimes(3);
   });
 
-  it('should continue uploading remaining images when one fails (BUG FIX)', async () => {
+  it('should continue uploading remaining images when one fails', async () => {
     const product = makeProduct({
       images: [
         {
@@ -160,26 +150,47 @@ describe('uploadProductToDrive', () => {
 
     // All 3 upload attempts should have been made
     expect(mockUploadFile).toHaveBeenCalledTimes(3);
-
-    // Sheet row should still be added
-    expect(result.sheetRowAdded).toBe(true);
   });
 
   it('should not throw when image download fails', async () => {
-    const product = makeProduct();
+    // Use images without processedPath so there's no fallback URL
+    const product = makeProduct({
+      images: [
+        {
+          id: 'img-1',
+          originalPath: 'https://storage.example.com/original1.jpg',
+          processedPath: null,
+          filename: 'photo1.jpg',
+          sortOrder: 0,
+        },
+        {
+          id: 'img-2',
+          originalPath: 'https://storage.example.com/original2.jpg',
+          processedPath: null,
+          filename: 'photo2.jpg',
+          sortOrder: 1,
+        },
+      ],
+    });
 
-    // First fetch fails, second succeeds
+    const failResponse = {
+      ok: false,
+      status: 404,
+      statusText: 'Not Found',
+    };
+    const successResponse = {
+      ok: true,
+      arrayBuffer: () => Promise.resolve(Buffer.from('fake').buffer),
+      headers: new Headers({ 'content-type': 'image/jpeg' }),
+    };
+
+    // First image: all 3 retry attempts fail (404)
+    // Second image: succeeds on first attempt
     (global.fetch as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({
-        ok: false,
-        status: 404,
-        statusText: 'Not Found',
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        arrayBuffer: () => Promise.resolve(Buffer.from('fake').buffer),
-        headers: new Headers({ 'content-type': 'image/jpeg' }),
-      });
+      .mockResolvedValueOnce(failResponse)
+      .mockResolvedValueOnce(failResponse)
+      .mockResolvedValueOnce(failResponse)
+      .mockResolvedValueOnce(successResponse);
 
     // Should not throw
     const result = await uploadProductToDrive(product);
@@ -240,16 +251,6 @@ describe('uploadProductToDrive', () => {
     // Only 1 image should have been downloaded/uploaded
     expect(global.fetch).toHaveBeenCalledTimes(1);
     expect(result.uploadedFiles).toHaveLength(1);
-  });
-
-  it('should still succeed even if Google Sheets append fails', async () => {
-    const product = makeProduct();
-    mockAppendToSheet.mockRejectedValueOnce(new Error('Sheets API error'));
-
-    const result = await uploadProductToDrive(product);
-
-    expect(result.uploadedFiles).toHaveLength(2);
-    expect(result.sheetRowAdded).toBe(false);
   });
 
   it('should sort images by sortOrder before uploading', async () => {

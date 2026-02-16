@@ -223,8 +223,8 @@ export default function ProductImagesPage({
     return (
       <div className="text-center py-12">
         <p className="text-zinc-500">Produkt nicht gefunden</p>
-        <Button onClick={() => router.push('/products')} className="mt-4">
-          Zurück zur Übersicht
+        <Button onClick={() => router.push('/')} className="mt-4">
+          Zurück zum Scanner
         </Button>
       </div>
     );
@@ -313,7 +313,7 @@ export default function ProductImagesPage({
 
           {isUploading && (
             <p className="text-xs text-zinc-500">
-              Bilder werden zu Google Drive hochgeladen und in Google Sheets eingetragen...
+              Bilder werden zu Google Drive hochgeladen...
             </p>
           )}
         </div>
@@ -374,10 +374,10 @@ export default function ProductImagesPage({
       {showNextProduct && (
         <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 space-y-3">
           <Link
-            href="/products/new"
+            href="/"
             className="block w-full text-center bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors"
           >
-            Nächstes Produkt hinzufügen
+            Naechstes Produkt scannen
           </Link>
           {isBusy && (
             <p className="text-xs text-blue-600 dark:text-blue-400 text-center">
