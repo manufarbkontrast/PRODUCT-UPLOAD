@@ -1,27 +1,133 @@
 # SPZ Produkt-Upload Tool
 
-Web-App für Mitarbeiter zum Einpflegen von Produkten in das SPZ-System. Erfasst Produktdaten, bearbeitet Bilder automatisch und lädt alles zu Google Drive hoch.
+Web-App zur strukturierten Erfassung, KI-Bildbearbeitung und automatischen Google-Drive-Ablage von Produktdaten. Optimiert fuer Zalando-Attribute und Shopify-Integration.
 
 ---
 
-## Features
+## Architektur
 
-- **Strukturierte Produkterfassung**: Modellname, Geschlecht, Kategorie, SKU, Preis
-- **Shopify-Integration**: EAN-Scan holt automatisch Produktdaten aus Shopify
-- **Automatische Bildbearbeitung**: Größenanpassung, Hintergrund, Komprimierung via Gemini
-- **Google Drive Integration**: Automatischer Upload mit Ordnerstruktur
-- **Produktübersicht**: Alle Produkte mit Bildern und Daten auf einen Blick
+```mermaid
+graph TB
+    subgraph Frontend["Frontend (Next.js 16 + React 19)"]
+        Dashboard["Dashboard<br/>EAN Scanner"]
+        ProductForm["Produktformular<br/>Zalando-Attribute"]
+        ImagePage["Bild-Upload<br/>Drag & Drop"]
+    end
+
+    subgraph API["API Routes (Next.js)"]
+        EanAPI["/api/ean-lookup"]
+        ProductAPI["/api/products"]
+        ImageAPI["/api/products/id/images"]
+        ProcessAPI["/api/products/id/process"]
+        UploadAPI["/api/products/id/upload"]
+        GoogleAuth["/api/google/auth"]
+    end
+
+    subgraph External["Externe Services"]
+        Shopify["Shopify Admin API<br/>Produktdaten"]
+        Gemini["Gemini 2.0 Flash<br/>Bildbearbeitung"]
+        Drive["Google Drive API<br/>Dateiablage"]
+        N8N["n8n (optional)<br/>Orchestrierung"]
+    end
+
+    subgraph Storage["Datenhaltung"]
+        Supabase["Supabase<br/>PostgreSQL + Storage"]
+    end
+
+    Dashboard --> EanAPI
+    EanAPI --> Shopify
+    ProductForm --> ProductAPI
+    ProductAPI --> Supabase
+    ImagePage --> ImageAPI
+    ImageAPI --> Supabase
+    ImagePage --> ProcessAPI
+    ProcessAPI --> Gemini
+    ProcessAPI --> N8N
+    ProcessAPI --> Supabase
+    ImagePage --> UploadAPI
+    UploadAPI --> Drive
+    UploadAPI --> Supabase
+    GoogleAuth --> Drive
+```
+
+## Produkt-Workflow
+
+```mermaid
+sequenceDiagram
+    participant U as Mitarbeiter
+    participant App as Web-App
+    participant S as Shopify
+    participant DB as Supabase
+    participant G as Gemini AI
+    participant D as Google Drive
+
+    U->>App: EAN scannen / eingeben
+    App->>S: Produktdaten abfragen
+    S-->>App: Name, Marke, Farbe, Groesse
+    App->>DB: Produkt anlegen (Status: draft)
+
+    U->>App: Bilder hochladen
+    App->>DB: Bilder in Storage speichern
+
+    U->>App: "Bilder bearbeiten" klicken
+    App->>G: Bild + Kategorie-Prompt senden
+    G-->>App: Bearbeitetes Bild
+    App->>DB: Ergebnis speichern (Status: processed)
+
+    U->>App: "Zu Drive hochladen" klicken
+    App->>D: Ordner erstellen + Bilder hochladen
+    D-->>App: Ordner-URL
+    App->>DB: drive_url + Status: uploaded
+    App-->>U: Erfolg + Drive-Link
+```
+
+## Bildbearbeitungs-Pipeline
+
+```mermaid
+flowchart LR
+    A["Original-Bild"] --> B{"Kategorie?"}
+    B -->|Kleidung| C["Zalando-Format<br/>1:1.44 Aspect<br/>Kein Schatten"]
+    B -->|Schuhe| D["Natuerlicher Schatten<br/>60-65% Bildhoehe<br/>Max 2000x2000px"]
+    B -->|Accessoires| E["Minimaler Schatten<br/>1:1 Aspect<br/>Detail-Erhaltung"]
+
+    C --> F["Gemini 2.0 Flash"]
+    D --> F
+    E --> F
+
+    F --> G["Weisser Hintergrund<br/>Studio-Licht<br/>Zentriert"]
+    G --> H["Supabase Storage<br/>processed-images"]
+```
+
+## Produkt-Status
+
+```mermaid
+stateDiagram-v2
+    [*] --> draft: Produkt erstellt
+    draft --> processing: Bildbearbeitung gestartet
+    processing --> processed: Alle Bilder fertig
+    processing --> error: Fehler bei Bearbeitung
+    processed --> uploading: Drive-Upload gestartet
+    uploading --> uploaded: Upload erfolgreich
+    uploading --> error: Upload fehlgeschlagen
+    error --> processing: Erneut versuchen
+    uploaded --> [*]
+```
 
 ---
 
 ## Tech-Stack
 
-- **Frontend**: Next.js 16 (App Router) + React 19 + Tailwind CSS 4
-- **Backend**: Next.js API Routes
-- **Datenbank**: Supabase (PostgreSQL + Storage)
-- **Bildbearbeitung**: Gemini 2.0 Flash + Sharp (Node.js)
-- **Cloud**: Google Drive API, Shopify Admin API
-- **Deployment**: Docker Compose
+| Komponente | Technologie |
+|---|---|
+| Frontend | Next.js 16, React 19, Tailwind CSS 4 |
+| Backend | Next.js API Routes (Serverless) |
+| Datenbank | Supabase (PostgreSQL + Storage) |
+| Bildbearbeitung | Gemini 2.0 Flash (KI) |
+| Cloud-Ablage | Google Drive API + OAuth2 |
+| Produktdaten | Shopify Admin API (GraphQL + REST) |
+| Authentifizierung | Supabase Auth + PIN-Login |
+| Testing | Vitest |
+| Deployment | Docker Compose / Vercel |
 
 ---
 
@@ -29,34 +135,42 @@ Web-App für Mitarbeiter zum Einpflegen von Produkten in das SPZ-System. Erfasst
 
 - Node.js 20+
 - Git
-- Supabase-Projekt (für Datenbank & Storage)
-- Google Cloud Project mit aktivierter Drive API
-- Shopify Store mit Admin API Access Token
+- Supabase-Projekt (Datenbank & Storage)
+- Google Cloud Project (Drive API + OAuth2)
+- Shopify Store (Admin API Access Token)
+- Gemini API Key
 
 ---
 
 ## Schnellstart
 
-### 1. Repository klonen
-
 ```bash
-git clone <repo-url>
-cd SPZ-Product
-```
+# 1. Repository klonen
+git clone https://github.com/manufarbkontrast/spz-product-upload.git
+cd spz-product-upload
 
-### 2. Dependencies installieren
-
-```bash
+# 2. Dependencies installieren
 npm install
+
+# 3. Umgebungsvariablen konfigurieren
+cp .env.example .env
+# .env mit eigenen Werten befuellen
+
+# 4. Entwicklungsserver starten
+npm run dev
+
+# 5. App oeffnen: http://localhost:3000
 ```
 
-### 3. Umgebungsvariablen konfigurieren
+### Docker (Produktion)
 
 ```bash
-cp .env.example .env
+docker compose --profile prod up -d --build
 ```
 
-Wichtige Variablen in `.env`:
+---
+
+## Umgebungsvariablen
 
 ```env
 # Supabase
@@ -64,7 +178,7 @@ NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=xxx
 SUPABASE_SERVICE_ROLE_KEY=xxx
 
-# Shopify API
+# Shopify
 SHOPIFY_STORE_DOMAIN=dein-shop.myshopify.com
 SHOPIFY_ACCESS_TOKEN=shpat_xxx
 
@@ -74,174 +188,101 @@ GOOGLE_CLIENT_SECRET=xxx
 GOOGLE_REDIRECT_URI=http://localhost:3000/api/google/callback
 GOOGLE_DRIVE_FOLDER_ID=xxx
 
-# Gemini API (für Bildbearbeitung)
+# Gemini
 GEMINI_API_KEY=xxx
+GEMINI_IMAGE_MODEL=gemini-2.5-flash-image
 
-# Entwicklung
-NODE_ENV=development
-AUTH_DISABLED=true
+# Auth
+APP_USERNAME=admin
+APP_PIN=1234
+AUTH_DISABLED=false
 ```
-
-### 4. Entwicklungsserver starten
-
-```bash
-npm run dev
-```
-
-### 5. App öffnen
-
-- **Web-App**: http://localhost:3000
 
 ---
 
 ## Projektstruktur
 
 ```
+spz-product-upload/
 ├── app/
-│   ├── page.tsx                 # Dashboard
-│   ├── products/                # Produkt-Seiten
-│   │   ├── page.tsx            # Übersicht
-│   │   ├── new/page.tsx        # Neues Produkt
-│   │   └── [id]/               # Produkt-Details & Bilder
-│   └── api/
-│       ├── products/           # Produkt-API
-│       ├── ean-lookup/         # EAN-Suche (Shopify + Gemini)
-│       ├── google/             # Google Drive Auth
-│       └── health/             # Health-Check
-├── components/                  # React-Komponenten
+│   ├── api/
+│   │   ├── auth/              # Login/Logout (PIN)
+│   │   ├── products/          # CRUD + Bilder + Upload
+│   │   ├── ean-lookup/        # Shopify EAN-Suche
+│   │   ├── google/            # OAuth2 Flow
+│   │   └── webhooks/n8n/      # n8n Callbacks
+│   ├── page.tsx               # Dashboard
+│   ├── login/                 # Login-Seite
+│   └── products/              # Produkt-Seiten
+├── components/
+│   ├── EanScanner.tsx         # Barcode-Scanner (Kamera + manuell)
+│   ├── ImageUploader.tsx      # Drag-Drop Bild-Upload
+│   ├── ZalandoAttributeForm.tsx # Attribut-Editor
+│   └── ui/                    # Button, Input, Select, Textarea
 ├── lib/
-│   ├── supabase/               # Supabase Client
-│   └── shopify/                # Shopify API Client
-├── config/                     # App-Konfiguration
-│   ├── zalando-attributes.ts   # Silhouetten & Attribute
-│   └── ean-lookup-mappings.ts  # EAN-Mapping
-└── public/                     # Statische Dateien
+│   ├── supabase/              # Client + Server + Middleware
+│   ├── shopify/               # GraphQL + REST Client
+│   ├── google/                # OAuth2, Drive, Upload
+│   └── gemini-processor.ts    # KI-Bildbearbeitung
+├── config/
+│   ├── image-processing.ts    # Bild-Specs pro Kategorie
+│   ├── zalando-colors.ts      # Farbcode-Mappings
+│   ├── brands.ts              # Marken-Mappings
+│   └── product.ts             # Kategorie-Definitionen
+├── contexts/
+│   └── AuthContext.tsx         # Auth State Provider
+├── docker-compose.yml
+├── env.example
+└── package.json
 ```
 
 ---
 
-## Workflow
+## Features
 
-### Produkt erstellen
-
-1. `/products/new` öffnen
-2. EAN scannen oder eingeben
-3. Produktdaten werden automatisch aus Shopify geladen
-4. Silhouette (Produktart) manuell auswählen
-5. Bilder hochladen
-6. Bilder werden automatisch bearbeitet
-7. "Zu Google Drive hochladen" klicken
-8. Fertig - Link zum Drive-Ordner wird angezeigt
-
-### EAN-Lookup
-
-Der EAN-Lookup sucht in dieser Reihenfolge:
-1. **Shopify** (primär) - Holt aktuelle Produktdaten aus deinem Shop
-2. **Gemini AI** (Fallback) - Sucht im Internet nach dem Produkt
+- **EAN-Scanner**: Kamera-basierter Barcode-Scan + manuelle Eingabe
+- **Shopify-Lookup**: Automatischer Produktdaten-Import via EAN
+- **KI-Bildbearbeitung**: Kategorie-spezifische Prompts (Kleidung/Schuhe/Accessoires)
+- **Google Drive Upload**: Automatische Ordnerstruktur pro Produkt
+- **Zalando-Attribute**: Farb-/Marken-/Silhouetten-Mappings
+- **Status-Tracking**: Echtzeit-Status mit Polling (5s)
+- **PIN-Auth**: Einfache Authentifizierung fuer Mitarbeiter
+- **n8n-Integration**: Optionale externe Bild-Orchestrierung
 
 ---
 
-## Bildbearbeitung
+## Datenbank
 
-Bilder werden automatisch verarbeitet:
+### products
 
-- **Format**: WebP (komprimiert)
-- **Größe**: Max. 1200x1600px
-- **Hintergrund**: Weiß
-- **Qualität**: 85%
+| Spalte | Typ | Beschreibung |
+|---|---|---|
+| id | UUID | Primary Key |
+| ean | TEXT UNIQUE | Barcode |
+| name | TEXT | Produktname |
+| gender | TEXT | mann/frau/unisex/kinder |
+| category | TEXT | Zalando-Silhouette |
+| status | TEXT | draft/processing/processed/uploaded/error |
+| drive_url | TEXT | Google Drive Link |
+| zalando_attributes | JSONB | Marke, Farbe, Groesse, Material |
 
-Konfigurierbar in `config/image-processing.ts`.
+### product_images
 
----
-
-## Supabase Setup
-
-### Tabellen
-
-```sql
--- products
-CREATE TABLE products (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  ean TEXT UNIQUE,
-  name TEXT NOT NULL,
-  gender TEXT NOT NULL,
-  category TEXT NOT NULL,
-  description TEXT,
-  sku TEXT,
-  status TEXT DEFAULT 'draft',
-  drive_url TEXT,
-  zalando_attributes JSONB,
-  user_id UUID REFERENCES auth.users(id),
-  created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now()
-);
-
--- product_images
-CREATE TABLE product_images (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  product_id UUID REFERENCES products(id) ON DELETE CASCADE,
-  original_path TEXT NOT NULL,
-  processed_path TEXT,
-  filename TEXT NOT NULL,
-  sort_order INTEGER DEFAULT 0,
-  status TEXT DEFAULT 'pending',
-  created_at TIMESTAMPTZ DEFAULT now()
-);
-
--- RLS aktivieren
-ALTER TABLE products ENABLE ROW LEVEL SECURITY;
-ALTER TABLE product_images ENABLE ROW LEVEL SECURITY;
-```
-
----
-
-## Google Drive Setup
-
-### 1. Google Cloud Console
-
-1. Neues Projekt erstellen
-2. Drive API aktivieren
-3. OAuth 2.0 Credentials erstellen
-4. Redirect URI hinzufügen: `http://localhost:3000/api/google/callback`
-
-### 2. Autorisierung
-
-Beim ersten Upload wird zur Google-Anmeldung weitergeleitet.
-
----
-
-## Shopify Setup
-
-### Admin API Access Token
-
-1. Shopify Admin → Apps → App-Entwicklung
-2. Neue App erstellen
-3. Admin API Scopes: `read_products`
-4. Access Token kopieren
-
----
-
-## Docker (Produktion)
-
-```bash
-# Produktions-Profil starten
-docker compose --profile prod up -d --build
-```
-
-### Checkliste
-
-- [ ] `.env` mit Produktionswerten
-- [ ] `NODE_ENV=production`
-- [ ] `AUTH_DISABLED=false`
-- [ ] Sichere Passwörter/Tokens
-- [ ] HTTPS via Caddy konfiguriert
+| Spalte | Typ | Beschreibung |
+|---|---|---|
+| id | UUID | Primary Key |
+| product_id | UUID | FK -> products |
+| original_path | TEXT | Pfad im Storage |
+| processed_path | TEXT | Bearbeitetes Bild |
+| status | TEXT | pending/processing/done/error |
+| sort_order | INTEGER | Reihenfolge |
 
 ---
 
 ## Sicherheit
 
-- Session-basierte Authentifizierung (Username + PIN)
-- Row Level Security in Supabase
-- Datei-Uploads validiert (Typ, Größe)
-- API-Routen geschützt
-- `.env` niemals committen
+- Session-basierte Authentifizierung (Supabase + PIN)
+- Row Level Security auf allen Tabellen
+- Datei-Upload-Validierung (Typ + Groesse)
+- Service Role Client fuer Server-Operationen
+- Alle Secrets via Umgebungsvariablen
