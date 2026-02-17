@@ -2,7 +2,7 @@
 
 ### Branch & Stand
 - **Branch**: `main`
-- **Letzter Commit**: `573c43b feat: add product delete button to product images page`
+- **Letzter Commit**: `65450dc chore: save session context 2026-02-17`
 - **Build**: OK (Static + Dynamic routes)
 - **Tests**: 6/6 passed (Vitest)
 - **Deployment**: Vercel Production live (`https://spz-product-upload.vercel.app`)
@@ -41,6 +41,11 @@
      - Disabled waehrend `isBusy || deleting`, Spinner-Animation beim Loeschen
    - DELETE API (`app/api/products/[id]/route.ts`) war bereits vorhanden
 
+5. **Session Context Setup** (Commit `65450dc`)
+   - `.claude/context/` Verzeichnis erstellt
+   - `CLAUDE.md` erstellt (Projekt-Uebersicht + Quick Start + Konventionen)
+   - Session-Snapshot + latest.md angelegt
+
 ### Offene Aufgaben
 
 **Aus AI Review (noch nicht implementiert):**
@@ -70,7 +75,7 @@
 
 - **Working Tree**: `next-env.d.ts` (auto-modified, harmlos), `.env.production`, `.env.production.template`, `deploy.sh` (alle untracked)
 - **Dev-Server**: War als Background-Task gestartet (Port 3000), moeglicherweise nicht mehr aktiv
-- **Vercel**: Letzte Deployment-URL `https://spz-product-upload.vercel.app` (Commit `573c43b`)
+- **Vercel**: Letzte Deployment-URL `https://spz-product-upload.vercel.app` (Commit `573c43b`, neuerer Context-Commit `65450dc` nicht deployed — nur Docs)
 - **Supabase**: Projekt `hyjqtcikajmnwxmcmplg` (URL in `.env.local`/`.env.production`)
 - **Google OAuth**: Token muss manuell ueber `/api/google/auth` geholt werden (kein automatischer Refresh)
 - **Repo umbenannt**: GitHub zeigt "This repository moved" — Push funktioniert trotzdem
