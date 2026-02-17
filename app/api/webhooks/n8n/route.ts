@@ -141,7 +141,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('[Webhook] Error:', error);
     return NextResponse.json(
-      { error: 'Webhook-Verarbeitung fehlgeschlagen', details: String(error) },
+      { error: 'Webhook-Verarbeitung fehlgeschlagen' },
       { status: 500 }
     );
   }

@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : String(error),
+        error: 'Fehler bei der Bildverarbeitung',
       },
       { status: 500 }
     );

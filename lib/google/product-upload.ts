@@ -1,4 +1,5 @@
 import { createFolder, uploadFile, makeFilePublic, listFiles, getFile, UploadResult } from './drive';
+import { IMAGE_DOWNLOAD_MAX_RETRIES, IMAGE_DOWNLOAD_RETRY_DELAY_MS } from '@/config/constants';
 
 export interface ProductUploadData {
   id: string;
@@ -84,7 +85,7 @@ function getExtensionFromMimeOrUrl(mimeType: string, url: string): string {
  */
 async function downloadImageFromUrl(
   url: string,
-  maxRetries: number = 3
+  maxRetries: number = IMAGE_DOWNLOAD_MAX_RETRIES
 ): Promise<{ buffer: Buffer; mimeType: string }> {
   let lastError: Error | null = null;
 
@@ -106,7 +107,7 @@ async function downloadImageFromUrl(
       lastError = err instanceof Error ? err : new Error(String(err));
       console.error(`[DriveUpload] Download attempt ${attempt} failed: ${lastError.message}`);
       if (attempt < maxRetries) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise(resolve => setTimeout(resolve, IMAGE_DOWNLOAD_RETRY_DELAY_MS));
       }
     }
   }

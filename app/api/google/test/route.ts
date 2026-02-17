@@ -27,10 +27,9 @@ export async function GET() {
       },
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
     console.error('Google API test failed:', error);
     return NextResponse.json(
-      { success: false, error: message },
+      { success: false, error: 'Google API test failed' },
       { status: 500 }
     );
   }
@@ -66,7 +65,7 @@ export async function POST() {
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: 'Google Drive write test failed',
       },
       { status: 500 }
     );

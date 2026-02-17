@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import type { EanLookupResult } from '@/config/ean-lookup-mappings';
+import { BARCODE_SCAN_INTERVAL_MS } from '@/config/constants';
 
 interface EanScannerProps {
   readonly onScan: (ean: string) => void;
@@ -148,7 +149,7 @@ export default function EanScanner({ onScan, onSkip, onLookupResult, autoLookup 
             stopCamera();
             handleEanDetected(ean);
           }
-        }, 500);
+        }, BARCODE_SCAN_INTERVAL_MS);
       }
     } catch {
       setError('Kamera nicht verfügbar. Bitte manuell eingeben.');

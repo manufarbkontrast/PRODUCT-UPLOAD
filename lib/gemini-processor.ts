@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { getImagePromptForCategory } from '@/config/image-processing';
+import { validateImageUrl } from '@/lib/validation/url';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
@@ -25,7 +26,8 @@ export async function processImageWithGemini(
 
   const prompt = getImagePromptForCategory(category);
 
-  // 1. Download the original image
+  // 1. Validate and download the original image
+  validateImageUrl(imageUrl);
   console.log(`[Gemini] Downloading image: ${imageUrl}`);
   const imageResponse = await fetch(imageUrl);
   if (!imageResponse.ok) {

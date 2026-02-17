@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui';
 import ImageUploader from '@/components/ImageUploader';
+import { IMAGE_POLL_INTERVAL_MS } from '@/config/constants';
 
 interface ProductImage {
   id: string;
@@ -89,7 +90,7 @@ export default function ProductImagesPage({
       product.status === 'uploading';
 
     if (needsPolling) {
-      const interval = setInterval(fetchProduct, 3000);
+      const interval = setInterval(fetchProduct, IMAGE_POLL_INTERVAL_MS);
       return () => clearInterval(interval);
     }
   }, [product, fetchProduct]);

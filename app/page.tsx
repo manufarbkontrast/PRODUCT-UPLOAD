@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import EanScanner from '@/components/EanScanner';
 import type { EanLookupResult } from '@/config/ean-lookup-mappings';
+import { PRODUCT_POLL_INTERVAL_MS } from '@/config/constants';
 
 interface RecentProduct {
   readonly id: string;
@@ -64,7 +65,7 @@ export default function Home() {
       if (hasActiveRef.current) {
         fetchRecentProducts();
       }
-    }, 5000);
+    }, PRODUCT_POLL_INTERVAL_MS);
     return () => clearInterval(interval);
   }, [fetchRecentProducts]);
 

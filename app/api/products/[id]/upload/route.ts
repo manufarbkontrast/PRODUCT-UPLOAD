@@ -112,18 +112,18 @@ export async function POST(
     console.error(`[Upload] POST /api/products/${id}/upload error:`, error);
 
     // Reset status on error
-    const supabase = createServiceRoleClient();
-    await supabase
-      .from('products')
-      .update({ status: 'error' })
-      .eq('id', id)
-      .then(() => {});
+    try {
+      const supabase = createServiceRoleClient();
+      await supabase
+        .from('products')
+        .update({ status: 'error' })
+        .eq('id', id);
+    } catch (cleanupErr) {
+      console.warn('[Upload] Cleanup error (setting product status to error):', cleanupErr);
+    }
 
     return NextResponse.json(
-      {
-        error: 'Fehler beim Upload zu Google Drive',
-        details: error instanceof Error ? error.message : String(error),
-      },
+      { error: 'Fehler beim Upload zu Google Drive' },
       { status: 500 }
     );
   }

@@ -132,11 +132,10 @@ export async function POST(request: NextRequest) {
       updatedAt: product.updated_at,
     }, { status: 201 });
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error('POST /api/products error:', errorMessage, error);
+    console.error('POST /api/products error:', error);
 
     return NextResponse.json(
-      { error: `Fehler beim Erstellen: ${errorMessage}` },
+      { error: 'Fehler beim Erstellen des Produkts' },
       { status: 500 }
     );
   }

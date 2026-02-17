@@ -14,7 +14,7 @@ export async function GET() {
   } catch (error) {
     console.error('Auth status error:', error);
     return NextResponse.json(
-      { error: 'Failed to get auth status', details: String(error) },
+      { error: 'Failed to get auth status' },
       { status: 500 }
     );
   }
@@ -27,7 +27,7 @@ export async function POST() {
   } catch (error) {
     console.error('Auth URL generation error:', error);
     return NextResponse.json(
-      { error: 'Failed to generate auth URL', details: String(error) },
+      { error: 'Failed to generate auth URL' },
       { status: 500 }
     );
   }

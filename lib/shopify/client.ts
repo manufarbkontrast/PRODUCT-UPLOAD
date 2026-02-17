@@ -344,6 +344,7 @@ function stripHtml(html: string): string {
 
 /**
  * Holt alle Produkte eines Vendors (Marke)
+ * @deprecated Currently unused — was used by archived Dashboard/product pages.
  */
 export async function getProductsByVendor(vendor: string): Promise<ShopifyProduct[]> {
   const data = await shopifyFetch<{ products: ShopifyProduct[] }>(
@@ -354,6 +355,7 @@ export async function getProductsByVendor(vendor: string): Promise<ShopifyProduc
 
 /**
  * Holt ein einzelnes Produkt nach ID
+ * @deprecated Currently unused — was used by archived Dashboard/product pages.
  */
 export async function getProductById(productId: number): Promise<ShopifyProduct | null> {
   const data = await shopifyFetch<{ product: ShopifyProduct }>(

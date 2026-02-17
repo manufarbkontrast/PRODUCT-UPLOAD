@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { categoryImageType, getImageSpecsForCategory } from '@/config/image-processing';
 import { processImageWithGemini } from '@/lib/gemini-processor';
+import { N8N_HEALTH_CHECK_TIMEOUT_MS } from '@/config/constants';
 
 // Vercel Functions können bis zu 60s laufen (Hobby) / 300s (Pro)
 export const maxDuration = 60;
@@ -64,7 +65,7 @@ export async function POST(
     if (n8nWebhookUrl) {
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 2000);
+        const timeoutId = setTimeout(() => controller.abort(), N8N_HEALTH_CHECK_TIMEOUT_MS);
         const testRes = await fetch(n8nWebhookUrl.replace('/webhook/', '/healthz').replace('/process-image', ''), {
           method: 'GET',
           signal: controller.signal,
@@ -89,13 +90,11 @@ export async function POST(
       .update({ status: 'processing' })
       .eq('id', id);
 
-    // Set all images to processing
-    for (const img of product.images) {
-      await supabase
-        .from('product_images')
-        .update({ status: 'processing' })
-        .eq('id', img.id);
-    }
+    // Set all images to processing (batch update instead of N+1)
+    await supabase
+      .from('product_images')
+      .update({ status: 'processing' })
+      .eq('product_id', id);
 
     if (useDirectProcessing) {
       // Direkte Verarbeitung: Gemini direkt aufrufen (kein HTTP Self-Call)
@@ -247,12 +246,12 @@ export async function POST(
         .from('products')
         .update({ status: 'error' })
         .eq('id', id);
-    } catch {
-      // ignore cleanup errors
+    } catch (cleanupErr) {
+      console.warn('[Process] Cleanup error (setting product status to error):', cleanupErr);
     }
 
     return NextResponse.json(
-      { error: 'Fehler bei der Verarbeitung', details: String(error) },
+      { error: 'Fehler bei der Verarbeitung' },
       { status: 500 }
     );
   }
