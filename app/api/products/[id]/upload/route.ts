@@ -122,8 +122,9 @@ export async function POST(
       console.warn('[Upload] Cleanup error (setting product status to error):', cleanupErr);
     }
 
+    const errorMessage = error instanceof Error ? error.message : 'Unbekannter Fehler';
     return NextResponse.json(
-      { error: 'Fehler beim Upload zu Google Drive' },
+      { error: 'Fehler beim Upload zu Google Drive', details: errorMessage },
       { status: 500 }
     );
   }

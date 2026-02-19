@@ -213,7 +213,18 @@ export async function getGoogleAuth() {
  * Prefers OAuth2 (user has storage quota) over Service Account (0 GB quota).
  * Falls back to Service Account if OAuth2 is not available or invalid.
  */
+/**
+ * Cache for Drive auth client to avoid repeated token refreshes within the same
+ * request lifecycle. Each serverless invocation gets a fresh cache.
+ */
+let cachedDriveAuth: Awaited<ReturnType<typeof getGoogleAuth>> | ReturnType<typeof getOAuth2Client> | null = null;
+
 async function getGoogleAuthForDrive() {
+  // Return cached auth if available (prevents multiple token refreshes per request)
+  if (cachedDriveAuth) {
+    return cachedDriveAuth;
+  }
+
   // 1. Try OAuth2 first — user has storage quota, service accounts do NOT
   if (useOAuth2) {
     const tokens = loadSavedTokens();
@@ -229,6 +240,7 @@ async function getGoogleAuthForDrive() {
           persistTokensToFile(updatedTokens);
         });
         console.log('[Auth] Using OAuth2 for Drive (user has storage quota)');
+        cachedDriveAuth = oauth2Client;
         return oauth2Client;
       } catch (oauthError) {
         console.warn('[Auth] OAuth2 token refresh failed, falling back to Service Account:', oauthError);
@@ -238,7 +250,9 @@ async function getGoogleAuthForDrive() {
 
   // 2. Fall back to Service Account
   console.log('[Auth] Using Service Account for Drive');
-  return getGoogleAuth();
+  const auth = await getGoogleAuth();
+  cachedDriveAuth = auth;
+  return auth;
 }
 
 export async function getDriveClient() {

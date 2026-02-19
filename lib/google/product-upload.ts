@@ -192,7 +192,12 @@ async function uploadImages(
       uploadedFiles.push(result);
       console.log(`[DriveUpload] Uploaded: ${result.name} (${result.id})`);
     } catch (error) {
-      console.error(`[DriveUpload] Failed to upload ${image.filename}:`, error);
+      const errMsg = error instanceof Error ? error.message : String(error);
+      const errStack = error instanceof Error ? error.stack : '';
+      console.error(`[DriveUpload] Failed to upload ${image.filename}: ${errMsg}`);
+      console.error(`[DriveUpload] Stack: ${errStack}`);
+      console.error(`[DriveUpload] Primary URL was: ${primaryUrl}`);
+      console.error(`[DriveUpload] Fallback URL was: ${fallbackUrl || 'none'}`);
     }
   }
 
