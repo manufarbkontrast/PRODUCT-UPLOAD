@@ -243,13 +243,20 @@ async function getGoogleAuthForDrive() {
         cachedDriveAuth = oauth2Client;
         return oauth2Client;
       } catch (oauthError) {
-        console.warn('[Auth] OAuth2 token refresh failed, falling back to Service Account:', oauthError);
+        const msg = oauthError instanceof Error ? oauthError.message : String(oauthError);
+        console.error(`[Auth] OAuth2 token refresh FAILED: ${msg}`);
+        console.error('[Auth] This means Drive uploads will fail (Service Account has no storage quota).');
+        console.error('[Auth] Fix: Re-authorize via /api/google/auth → POST to get authUrl, then visit it.');
       }
     }
   }
 
-  // 2. Fall back to Service Account
-  console.log('[Auth] Using Service Account for Drive');
+  // 2. Fall back to Service Account (only for metadata ops, NOT file uploads)
+  // Service Accounts have 0 GB storage quota — file uploads will fail.
+  // Log a clear warning so the issue is diagnosable.
+  console.warn('[Auth] Falling back to Service Account for Drive.');
+  console.warn('[Auth] WARNING: File uploads will fail — Service Accounts have no storage quota.');
+  console.warn('[Auth] To fix: Re-authorize OAuth2 at /api/google/auth');
   const auth = await getGoogleAuth();
   cachedDriveAuth = auth;
   return auth;
