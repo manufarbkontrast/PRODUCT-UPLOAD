@@ -111,15 +111,15 @@ export async function POST(
   } catch (error) {
     console.error(`[Upload] POST /api/products/${id}/upload error:`, error);
 
-    // Reset status on error
+    // Set status to drive_error so frontend shows retry button
     try {
       const supabase = createServiceRoleClient();
       await supabase
         .from('products')
-        .update({ status: 'error' })
+        .update({ status: 'drive_error' })
         .eq('id', id);
     } catch (cleanupErr) {
-      console.warn('[Upload] Cleanup error (setting product status to error):', cleanupErr);
+      console.warn('[Upload] Cleanup error (setting product status to drive_error):', cleanupErr);
     }
 
     const errorMessage = error instanceof Error ? error.message : 'Unbekannter Fehler';

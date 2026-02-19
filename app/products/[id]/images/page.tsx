@@ -115,11 +115,15 @@ export default function ProductImagesPage({
         const res = await fetch(`/api/products/${id}/upload`, { method: 'POST' });
         if (!res.ok) {
           const data = await res.json();
-          console.error('[Images] Drive upload failed:', data.error);
+          const msg = data.details || data.error || 'Drive-Upload fehlgeschlagen';
+          console.error('[Images] Drive upload failed:', msg);
+          setError(msg);
         }
         await fetchProduct();
       } catch (err) {
-        console.error('[Images] Drive upload trigger failed:', err);
+        const msg = err instanceof Error ? err.message : 'Drive-Upload fehlgeschlagen';
+        console.error('[Images] Drive upload trigger failed:', msg);
+        setError(msg);
         await fetchProduct();
       }
     };
