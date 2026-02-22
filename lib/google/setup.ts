@@ -1,10 +1,17 @@
 import { getDriveClient } from './auth';
+import { escapeDriveQuery } from './drive-utils';
 
 /**
- * In-memory cache for auto-created Google Drive folder ID.
+ * Closure-based cache for the auto-created Google Drive folder ID.
  * Persists for the lifetime of the server process.
  */
-let cachedDriveFolderId: string | null = null;
+const driveFolderCache = (() => {
+  let cached: string | null = null;
+  return {
+    get: (): string | null => cached,
+    set: (value: string): string => { cached = value; return value; },
+  };
+})();
 
 const ROOT_FOLDER_NAME = 'SPZ-Product-Integration';
 
@@ -15,7 +22,7 @@ async function findFolderByName(name: string): Promise<string | null> {
   const drive = await getDriveClient();
 
   const response = await drive.files.list({
-    q: `name = '${name}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+    q: `name = '${escapeDriveQuery(name)}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
     fields: 'files(id, name)',
     pageSize: 1,
   });
@@ -37,15 +44,16 @@ export async function getOrCreateDriveFolderId(): Promise<string> {
   }
 
   // 2. Check in-memory cache
-  if (cachedDriveFolderId) {
-    return cachedDriveFolderId;
+  const cached = driveFolderCache.get();
+  if (cached) {
+    return cached;
   }
 
   // 3. Search for existing folder
   const existingId = await findFolderByName(ROOT_FOLDER_NAME);
   if (existingId) {
     console.log(`[GoogleSetup] Found existing Drive folder: ${ROOT_FOLDER_NAME} (${existingId})`);
-    cachedDriveFolderId = existingId;
+    driveFolderCache.set(existingId);
     return existingId;
   }
 
@@ -61,6 +69,6 @@ export async function getOrCreateDriveFolderId(): Promise<string> {
 
   const newId = response.data.id!;
   console.log(`[GoogleSetup] Created Drive folder: ${ROOT_FOLDER_NAME} (${newId})`);
-  cachedDriveFolderId = newId;
+  driveFolderCache.set(newId);
   return newId;
 }

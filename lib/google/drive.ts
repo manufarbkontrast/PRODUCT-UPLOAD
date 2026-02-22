@@ -1,5 +1,6 @@
 import { getDriveClient } from './auth';
 import { getOrCreateDriveFolderId } from './setup';
+import { escapeDriveQuery } from './drive-utils';
 import { Readable } from 'stream';
 
 export interface UploadResult {
@@ -79,7 +80,7 @@ export async function listFiles(
   const response = await drive.files.list({
     supportsAllDrives: true,
     includeItemsFromAllDrives: true,
-    q: `'${parentId}' in parents and trashed = false`,
+    q: `'${escapeDriveQuery(parentId)}' in parents and trashed = false`,
     pageSize,
     fields: 'files(id, name, mimeType, size, createdTime, modifiedTime, webViewLink, webContentLink)',
   });

@@ -342,24 +342,3 @@ function stripHtml(html: string): string {
     .trim();
 }
 
-/**
- * Holt alle Produkte eines Vendors (Marke)
- * @deprecated Currently unused — was used by archived Dashboard/product pages.
- */
-export async function getProductsByVendor(vendor: string): Promise<ShopifyProduct[]> {
-  const data = await shopifyFetch<{ products: ShopifyProduct[] }>(
-    `/products.json?vendor=${encodeURIComponent(vendor)}&limit=250`
-  );
-  return data?.products || [];
-}
-
-/**
- * Holt ein einzelnes Produkt nach ID
- * @deprecated Currently unused — was used by archived Dashboard/product pages.
- */
-export async function getProductById(productId: number): Promise<ShopifyProduct | null> {
-  const data = await shopifyFetch<{ product: ShopifyProduct }>(
-    `/products/${productId}.json`
-  );
-  return data?.product || null;
-}

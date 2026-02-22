@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
+import { requireUser } from '@/lib/auth/require-user';
+import { validateImageSize, validateImageMagicBytes } from '@/lib/validation/image';
+import { extractStoragePath } from '@/lib/supabase/storage-path';
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { error: authError } = await requireUser();
+  if (authError) return authError;
+
   const { id } = await params;
 
   try {
@@ -29,9 +35,15 @@ export async function POST(
       return NextResponse.json({ error: 'Keine Datei hochgeladen' }, { status: 400 });
     }
 
-    // Validate file type
+    // Validate file type (MIME from Content-Type header)
     if (!file.type.startsWith('image/')) {
       return NextResponse.json({ error: 'Nur Bilder erlaubt' }, { status: 400 });
+    }
+
+    // Validate file size before reading into memory
+    const sizeCheck = validateImageSize(file.size);
+    if (!sizeCheck.valid) {
+      return NextResponse.json({ error: sizeCheck.error }, { status: 400 });
     }
 
     // If replace flag is set, delete all existing images for this product first
@@ -46,21 +58,11 @@ export async function POST(
 
         // Delete from storage
         const originalPaths = existingImages
-          .map((img) => {
-            if (!img.original_path) return null;
-            return img.original_path.includes('/product-images/')
-              ? img.original_path.split('/product-images/').pop()!
-              : img.original_path;
-          })
+          .map((img) => img.original_path ? extractStoragePath(img.original_path, 'product-images') : null)
           .filter(Boolean) as string[];
 
         const processedPaths = existingImages
-          .map((img) => {
-            if (!img.processed_path) return null;
-            return img.processed_path.includes('/processed-images/')
-              ? img.processed_path.split('/processed-images/').pop()!
-              : img.processed_path;
-          })
+          .map((img) => img.processed_path ? extractStoragePath(img.processed_path, 'processed-images') : null)
           .filter(Boolean) as string[];
 
         if (originalPaths.length > 0) {
@@ -91,6 +93,13 @@ export async function POST(
 
     // Upload to Supabase Storage
     const bytes = await file.arrayBuffer();
+
+    // Validate magic bytes to confirm actual image content
+    const magicCheck = validateImageMagicBytes(bytes);
+    if (!magicCheck.valid) {
+      return NextResponse.json({ error: magicCheck.error }, { status: 400 });
+    }
+
     const { error: uploadError } = await supabase.storage
       .from('product-images')
       .upload(storagePath, Buffer.from(bytes), {

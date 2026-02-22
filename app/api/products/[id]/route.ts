@@ -1,15 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
-
-function resolveStorageUrl(
-  supabase: ReturnType<typeof createServiceRoleClient>,
-  path: unknown,
-  bucket: string
-): string | null {
-  if (!path || typeof path !== 'string') return null;
-  if (path.startsWith('http')) return path;
-  return supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl;
-}
+import { requireUser } from '@/lib/auth/require-user';
+import { resolveStorageUrl } from '@/lib/supabase/storage-url';
+import { validStatuses } from '@/config/product';
 
 function mapProduct(
   p: Record<string, unknown>,
@@ -48,6 +41,9 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { error: authError } = await requireUser();
+  if (authError) return authError;
+
   const { id } = await params;
 
   try {
@@ -77,10 +73,43 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { error: authError } = await requireUser();
+  if (authError) return authError;
+
   const { id } = await params;
 
   try {
     const body = await request.json();
+
+    // Validate status against allowed values
+    if (body.status !== undefined) {
+      const allowed: readonly string[] = validStatuses;
+      if (!allowed.includes(body.status)) {
+        return NextResponse.json(
+          { error: `Ungültiger Status: ${body.status}` },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Validate driveUrl format
+    if (body.driveUrl !== undefined && body.driveUrl !== null && body.driveUrl !== '') {
+      try {
+        const parsed = new URL(body.driveUrl);
+        if (!['http:', 'https:'].includes(parsed.protocol)) {
+          return NextResponse.json(
+            { error: 'driveUrl muss eine HTTP(S)-URL sein' },
+            { status: 400 }
+          );
+        }
+      } catch {
+        return NextResponse.json(
+          { error: 'driveUrl ist keine gültige URL' },
+          { status: 400 }
+        );
+      }
+    }
+
     const supabase = createServiceRoleClient();
 
     // Map camelCase to snake_case for Supabase
@@ -117,6 +146,9 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { error: authError } = await requireUser();
+  if (authError) return authError;
+
   const { id } = await params;
 
   try {

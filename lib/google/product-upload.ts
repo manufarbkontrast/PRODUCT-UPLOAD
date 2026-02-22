@@ -1,5 +1,7 @@
 import { createFolder, uploadFile, makeFilePublic, listFiles, getFile, UploadResult } from './drive';
 import { IMAGE_DOWNLOAD_MAX_RETRIES, IMAGE_DOWNLOAD_RETRY_DELAY_MS } from '@/config/constants';
+import { extensionFromMimeOrUrl } from '@/lib/mime';
+import { validateImageUrl } from '@/lib/validation/url';
 
 export interface ProductUploadData {
   id: string;
@@ -58,24 +60,6 @@ async function getNextImageNumber(folderId: string): Promise<number> {
   return maxNumber + 1;
 }
 
-/**
- * Determine file extension from mime type or URL.
- */
-function getExtensionFromMimeOrUrl(mimeType: string, url: string): string {
-  const mimeToExt: Record<string, string> = {
-    'image/jpeg': 'jpg',
-    'image/png': 'png',
-    'image/webp': 'webp',
-    'image/gif': 'gif',
-  };
-  if (mimeToExt[mimeType]) return mimeToExt[mimeType];
-  const urlExt = url.split('.').pop()?.split('?')[0]?.toLowerCase();
-  if (urlExt && ['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(urlExt)) {
-    return urlExt === 'jpeg' ? 'jpg' : urlExt;
-  }
-  return 'jpg';
-}
-
 // ---------------------------------------------------------------------------
 // Image download with retry
 // ---------------------------------------------------------------------------
@@ -87,6 +71,9 @@ async function downloadImageFromUrl(
   url: string,
   maxRetries: number = IMAGE_DOWNLOAD_MAX_RETRIES
 ): Promise<{ buffer: Buffer; mimeType: string }> {
+  // Validate URL against SSRF before any download attempts
+  validateImageUrl(url);
+
   let lastError: Error | null = null;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -183,7 +170,7 @@ async function uploadImages(
       }
 
       const { buffer, mimeType } = downloadResult;
-      const ext = getExtensionFromMimeOrUrl(mimeType, primaryUrl);
+      const ext = extensionFromMimeOrUrl(mimeType, primaryUrl);
       const uploadFileName = `${startingImageNumber + i}_${sku}.${ext}`;
 
       console.log(`[DriveUpload] Uploading ${uploadFileName} (${(buffer.length / 1024).toFixed(0)} KB)`);

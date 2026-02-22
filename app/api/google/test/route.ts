@@ -21,8 +21,13 @@ interface StepResult {
 /**
  * GET: Diagnose Google Drive upload pipeline step by step.
  * Tests auth, folder access, file create, file upload, permissions, and Supabase image download.
+ * Only available in non-production environments.
  */
 export async function GET() {
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
+
   const steps: StepResult[] = [];
 
   // Step 1: Auth status

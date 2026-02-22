@@ -10,8 +10,10 @@ const SCOPES = [
 const SERVICE_ACCOUNT_PATH = path.join(process.cwd(), 'google-service-account.json');
 const TOKEN_PATH = path.join(process.cwd(), 'google-oauth-token.json');
 
-// Check if OAuth2 credentials are configured
-const useOAuth2 = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+// Check if OAuth2 credentials are configured (read at runtime, not module load)
+function isOAuth2Configured(): boolean {
+  return !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+}
 
 interface OAuth2Tokens {
   access_token: string;
@@ -70,8 +72,7 @@ function persistTokensToFile(tokens: OAuth2Tokens | Credentials): void {
   } catch {
     console.warn(
       '[Google Auth] Could not write tokens to filesystem (expected on Vercel).',
-      'Set GOOGLE_OAUTH_TOKENS env var with this base64 value:',
-      Buffer.from(JSON.stringify(tokens)).toString('base64')
+      'Re-authorize via /api/google/auth or set GOOGLE_OAUTH_TOKENS env var manually.'
     );
   }
 }
@@ -150,7 +151,7 @@ export function loadSavedTokens(): OAuth2Tokens | null {
  * Check if OAuth2 is configured and has valid tokens.
  */
 export function isOAuth2Ready(): boolean {
-  if (!useOAuth2) return false;
+  if (!isOAuth2Configured()) return false;
   const tokens = loadSavedTokens();
   return !!(tokens && tokens.refresh_token);
 }
@@ -185,7 +186,7 @@ export async function getGoogleAuth() {
   }
 
   // 3. OAuth2 as fallback (local development with user-scoped access)
-  if (useOAuth2) {
+  if (isOAuth2Configured()) {
     const tokens = loadSavedTokens();
     if (tokens && tokens.refresh_token) {
       const oauth2Client = getOAuth2Client();
@@ -213,26 +214,34 @@ export async function getGoogleAuth() {
  * Prefers OAuth2 (user has storage quota) over Service Account (0 GB quota).
  * Falls back to Service Account if OAuth2 is not available or invalid.
  */
-/**
- * Cache for Drive auth client to avoid repeated token refreshes within the same
- * request lifecycle. Each serverless invocation gets a fresh cache.
- */
-let cachedDriveAuth: Awaited<ReturnType<typeof getGoogleAuth>> | ReturnType<typeof getOAuth2Client> | null = null;
+type DriveAuthClient = Awaited<ReturnType<typeof getGoogleAuth>> | ReturnType<typeof getOAuth2Client>;
 
-async function getGoogleAuthForDrive() {
-  // Return cached auth if available (prevents multiple token refreshes per request)
-  if (cachedDriveAuth) {
-    return cachedDriveAuth;
+/**
+ * Closure-based cache for Drive auth client.
+ * Avoids repeated token refreshes within the same request lifecycle.
+ * Each serverless invocation gets a fresh cache.
+ */
+const driveAuthCache = (() => {
+  let cached: DriveAuthClient | null = null;
+  return {
+    get: (): DriveAuthClient | null => cached,
+    set: (value: DriveAuthClient): DriveAuthClient => { cached = value; return value; },
+  };
+})();
+
+async function getGoogleAuthForDrive(): Promise<DriveAuthClient> {
+  const cached = driveAuthCache.get();
+  if (cached) {
+    return cached;
   }
 
   // 1. Try OAuth2 first — user has storage quota, service accounts do NOT
-  if (useOAuth2) {
+  if (isOAuth2Configured()) {
     const tokens = loadSavedTokens();
     if (tokens && tokens.refresh_token) {
       try {
         const oauth2Client = getOAuth2Client();
         oauth2Client.setCredentials(tokens);
-        // Validate by requesting a fresh access token
         const { credentials } = await oauth2Client.refreshAccessToken();
         oauth2Client.setCredentials(credentials);
         oauth2Client.on('tokens', (newTokens) => {
@@ -240,8 +249,7 @@ async function getGoogleAuthForDrive() {
           persistTokensToFile(updatedTokens);
         });
         console.log('[Auth] Using OAuth2 for Drive (user has storage quota)');
-        cachedDriveAuth = oauth2Client;
-        return oauth2Client;
+        return driveAuthCache.set(oauth2Client);
       } catch (oauthError) {
         const msg = oauthError instanceof Error ? oauthError.message : String(oauthError);
         console.error(`[Auth] OAuth2 token refresh FAILED: ${msg}`);
@@ -252,14 +260,11 @@ async function getGoogleAuthForDrive() {
   }
 
   // 2. Fall back to Service Account (only for metadata ops, NOT file uploads)
-  // Service Accounts have 0 GB storage quota — file uploads will fail.
-  // Log a clear warning so the issue is diagnosable.
   console.warn('[Auth] Falling back to Service Account for Drive.');
   console.warn('[Auth] WARNING: File uploads will fail — Service Accounts have no storage quota.');
   console.warn('[Auth] To fix: Re-authorize OAuth2 at /api/google/auth');
   const auth = await getGoogleAuth();
-  cachedDriveAuth = auth;
-  return auth;
+  return driveAuthCache.set(auth);
 }
 
 export async function getDriveClient() {
@@ -281,7 +286,7 @@ export function getAuthStatus(): {
   const hasFileServiceAccount = serviceAccountFileExists();
   const hasServiceAccount = hasEnvServiceAccount || hasFileServiceAccount;
 
-  const tokens = useOAuth2 ? loadSavedTokens() : null;
+  const tokens = isOAuth2Configured() ? loadSavedTokens() : null;
   const hasOAuth2 = !!(tokens && tokens.refresh_token);
 
   // Drive prefers OAuth2 (user has quota) over Service Account
@@ -295,6 +300,6 @@ export function getAuthStatus(): {
     configured,
     ready,
     driveAuth,
-    authUrl: hasOAuth2 ? undefined : (useOAuth2 ? getAuthUrl() : undefined),
+    authUrl: hasOAuth2 ? undefined : (isOAuth2Configured() ? getAuthUrl() : undefined),
   };
 }

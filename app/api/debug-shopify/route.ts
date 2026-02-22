@@ -2,6 +2,10 @@ import { NextResponse } from 'next/server';
 import { isShopifyConfigured } from '@/lib/shopify/client';
 
 export async function GET() {
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
+
   const domain = process.env.SHOPIFY_STORE_DOMAIN;
   const token = process.env.SHOPIFY_ACCESS_TOKEN;
 

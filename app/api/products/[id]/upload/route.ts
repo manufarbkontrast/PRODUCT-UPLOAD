@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { uploadProductToDrive } from '@/lib/google';
+import { requireUser } from '@/lib/auth/require-user';
+import { resolveStorageUrl } from '@/lib/supabase/storage-url';
 
 export const maxDuration = 60;
 
@@ -8,6 +10,9 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { error: authError } = await requireUser();
+  if (authError) return authError;
+
   const { id } = await params;
 
   try {
@@ -47,15 +52,10 @@ export async function POST(
     console.log(`[Upload] Starting upload for product ${id}: ${product.name} (${uploadableImages.length} images)`);
 
     // Build image URLs with proper originalPath and processedPath separation
-    const resolveUrl = (path: string, bucket: string): string => {
-      if (path.startsWith('http')) return path;
-      return supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl;
-    };
-
     const imagesWithUrls = uploadableImages.map((img: Record<string, unknown>) => {
-      const originalUrl = resolveUrl(img.original_path as string, 'product-images');
+      const originalUrl = resolveStorageUrl(supabase, img.original_path, 'product-images') || '';
       const processedUrl = img.processed_path
-        ? resolveUrl(img.processed_path as string, 'processed-images')
+        ? resolveStorageUrl(supabase, img.processed_path, 'processed-images')
         : null;
 
       return {

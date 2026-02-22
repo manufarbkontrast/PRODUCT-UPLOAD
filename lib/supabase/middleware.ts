@@ -8,8 +8,10 @@ import { NextResponse, type NextRequest } from 'next/server';
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
-  // Skip auth entirely when AUTH_DISABLED is set (local development)
-  const authDisabled = process.env.AUTH_DISABLED === 'true';
+  // Skip auth entirely when AUTH_DISABLED is set (local development only)
+  const authDisabled =
+    process.env.AUTH_DISABLED === 'true' &&
+    process.env.NODE_ENV !== 'production';
   if (authDisabled) {
     return supabaseResponse;
   }
@@ -42,6 +44,9 @@ export async function updateSession(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
+  // Static asset extensions that don't need auth checks
+  const STATIC_EXTENSIONS = /\.(ico|png|jpg|jpeg|gif|svg|webp|css|js|map|woff2?|ttf|eot)$/;
+
   // Allow public paths without auth
   const isPublicPath =
     pathname === '/login' ||
@@ -51,7 +56,7 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith('/api/internal/') ||
     pathname.startsWith('/_next/') ||
     pathname === '/favicon.ico' ||
-    pathname.includes('.');
+    STATIC_EXTENSIONS.test(pathname);
 
   if (!user && !isPublicPath) {
     if (pathname.startsWith('/api/')) {

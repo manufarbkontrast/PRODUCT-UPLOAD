@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
-import { validateAdminToken } from '@/lib/admin-auth';
+import { validateN8nToken } from '@/lib/auth/n8n-auth';
 import { uploadProductToDrive } from '@/lib/google';
 
 export async function POST(request: NextRequest) {
-  const authError = validateAdminToken(request);
+  const authError = validateN8nToken(request);
   if (authError) return authError;
 
   try {

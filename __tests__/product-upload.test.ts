@@ -9,6 +9,11 @@ vi.mock('@/lib/google/drive', () => ({
   getFile: vi.fn(),
 }));
 
+// Mock URL validation so test URLs are accepted
+vi.mock('@/lib/validation/url', () => ({
+  validateImageUrl: vi.fn(),
+}));
+
 import { uploadProductToDrive, type ProductUploadData } from '@/lib/google/product-upload';
 import { createFolder, uploadFile, makeFilePublic } from '@/lib/google/drive';
 

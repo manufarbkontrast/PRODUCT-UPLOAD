@@ -1,8 +1,20 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { getImagePromptForCategory } from '@/config/image-processing';
 import { validateImageUrl } from '@/lib/validation/url';
+import { mimeToExtension } from '@/lib/mime';
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+/** Lazy-initialized GenAI client (avoids reading env at module load). */
+let _genAI: GoogleGenerativeAI | null = null;
+function getGenAI(): GoogleGenerativeAI {
+  if (!_genAI) {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      throw new Error('GEMINI_API_KEY ist nicht gesetzt. Bitte in .env eintragen.');
+    }
+    _genAI = new GoogleGenerativeAI(apiKey);
+  }
+  return _genAI;
+}
 
 export interface GeminiProcessResult {
   readonly imageBuffer: Buffer;
@@ -19,11 +31,6 @@ export async function processImageWithGemini(
   imageUrl: string,
   category: string
 ): Promise<GeminiProcessResult> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error('GEMINI_API_KEY ist nicht gesetzt. Bitte in .env eintragen.');
-  }
-
   const prompt = getImagePromptForCategory(category);
 
   // 1. Validate and download the original image
@@ -49,12 +56,11 @@ export async function processImageWithGemini(
   const modelName = process.env.GEMINI_IMAGE_MODEL || 'gemini-2.5-flash-image';
   console.log(`[Gemini] Using model: ${modelName}`);
 
-  const model = genAI.getGenerativeModel({
+  const model = getGenAI().getGenerativeModel({
     model: modelName,
     generationConfig: {
-      // @ts-expect-error - responseModalities ist unterstützt aber nicht in Types
       responseModalities: ['Text', 'Image'],
-    },
+    } as Record<string, unknown>,
   });
 
   const result = await model.generateContent([
@@ -101,7 +107,7 @@ export async function processImageWithGemini(
 
   // 4. Return Gemini output directly (no Sharp post-processing)
   const processedBuffer = Buffer.from(processedImageData, 'base64');
-  const format = mimeToFormat(processedMimeType);
+  const format = mimeToExtension(processedMimeType);
 
   console.log(`[Gemini] Processed image: ${(processedBuffer.length / 1024).toFixed(0)} KB, ${processedMimeType}`);
 
@@ -110,17 +116,4 @@ export async function processImageWithGemini(
     mimeType: processedMimeType,
     format,
   };
-}
-
-/**
- * Map MIME type to file extension
- */
-function mimeToFormat(mimeType: string): string {
-  const mapping: Record<string, string> = {
-    'image/png': 'png',
-    'image/jpeg': 'jpg',
-    'image/webp': 'webp',
-    'image/gif': 'gif',
-  };
-  return mapping[mimeType] || 'png';
 }

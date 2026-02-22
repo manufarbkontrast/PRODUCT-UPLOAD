@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
+import { requireUser } from '@/lib/auth/require-user';
+import { resolveStorageUrl } from '@/lib/supabase/storage-url';
 
 export async function GET() {
+  const { error: authError } = await requireUser();
+  if (authError) return authError;
+
   try {
     const supabase = createServiceRoleClient();
 
@@ -14,13 +19,6 @@ export async function GET() {
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-
-    // Helper to resolve storage paths to public URLs
-    const resolveUrl = (path: unknown, bucket: string): string | null => {
-      if (!path || typeof path !== 'string') return null;
-      if (path.startsWith('http')) return path;
-      return supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl;
-    };
 
     // Map to camelCase for frontend compatibility
     const mapped = (products || []).map(p => ({
@@ -39,8 +37,8 @@ export async function GET() {
       images: (p.images || []).map((img: Record<string, unknown>) => ({
         id: img.id,
         filename: img.filename,
-        originalPath: resolveUrl(img.original_path, 'product-images'),
-        processedPath: resolveUrl(img.processed_path, 'processed-images'),
+        originalPath: resolveStorageUrl(supabase, img.original_path, 'product-images'),
+        processedPath: resolveStorageUrl(supabase, img.processed_path, 'processed-images'),
         status: img.status,
         sortOrder: img.sort_order,
       })),
@@ -54,6 +52,9 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const { error: authError } = await requireUser();
+  if (authError) return authError;
+
   try {
     const body = await request.json();
     const { ean, name, gender, category, description, sku, zalandoAttributes } = body;

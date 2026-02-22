@@ -2,6 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getTokensFromCode } from '@/lib/google/auth';
 import { isVercelConfigured, updateEnvVar, triggerRedeploy } from '@/lib/vercel/update-env';
 
+/** Escape HTML special characters to prevent XSS */
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const code = searchParams.get('code');
@@ -61,7 +71,7 @@ export async function GET(request: NextRequest) {
 </style></head>
 <body>
   <p class="success">&#x2705; Google-Autorisierung erfolgreich!</p>
-  <p>Die OAuth2-Tokens wurden gespeichert. Token-Ablauf: ${expiryDate}</p>
+  <p>Die OAuth2-Tokens wurden gespeichert. Token-Ablauf: ${escapeHtml(expiryDate)}</p>
 
   ${vercelStatus ? `<div class="status">${vercelStatus}</div>` : ''}
   ${redeployStatus ? `<div class="status">${redeployStatus}</div>` : ''}
@@ -77,7 +87,7 @@ export async function GET(request: NextRequest) {
 
   <details>
     <summary>GOOGLE_OAUTH_TOKENS (base64) — zum manuellen Kopieren</summary>
-    <div class="token-box" id="tokenBox">${base64Tokens}</div>
+    <div class="token-box" id="tokenBox">${escapeHtml(base64Tokens)}</div>
     <button onclick="navigator.clipboard.writeText(document.getElementById('tokenBox').textContent).then(()=>this.textContent='Kopiert!')">
       In Zwischenablage kopieren
     </button>
@@ -87,7 +97,11 @@ export async function GET(request: NextRequest) {
 </body></html>`;
 
     return new NextResponse(html, {
-      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      headers: {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
+        'Content-Security-Policy': "default-src 'self'; script-src 'unsafe-inline'",
+      },
     });
   } catch (err) {
     console.error('OAuth callback error:', err);
