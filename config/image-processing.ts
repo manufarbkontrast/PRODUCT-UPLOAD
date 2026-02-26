@@ -52,20 +52,25 @@ export const categoryImageType: Record<string, ImageProcessingType> = {
   'Sonstiges': 'clothing',
 };
 
-// Schuh-Profil: Mit leichtem Schatten
+// Schuh-Profil: Mit leichtem Schatten, Spitze immer nach links
 export const SHOES_PROMPT = `Professional e-commerce product photography with these EXACT specifications:
 
-PRESERVE ORIGINAL COMPOSITION - CRITICAL:
+PRESERVE ORIGINAL COMPOSITION:
 - EXACT same camera angle as original image - do NOT change
 - EXACT same camera distance to product - do NOT zoom in or out
-- EXACT same viewing side (left/right/front/back) - do NOT rotate product
-- EXACT same product orientation and perspective - do NOT flip or mirror
-- If original shows left side -> keep left side
-- If original shows right side -> keep right side
-- If original shows front -> keep front view
-- If original shows back -> keep back view
 - Camera position relative to product MUST stay identical
 - Product size in frame MUST match original proportions
+- Front and back views: keep as-is
+
+SHOE ORIENTATION - CRITICAL:
+- The shoe toe MUST ALWAYS point to the LEFT side of the image
+- The heel MUST ALWAYS point to the RIGHT side of the image
+- If the original shoe points to the right, MIRROR/FLIP the shoe horizontally so the toe faces left
+- If the original shoe already points to the left, keep it as-is
+- This applies to ALL side-view shoe images without exception
+- For a pair of shoes: both toes pointing left
+- Front view and back view: keep original orientation (no flipping needed)
+- This is the #1 most important rule for shoe photography
 
 LIGHTING SETUP:
 - Soft, diffused studio lighting from top-left at 45-degree angle
@@ -97,11 +102,11 @@ TECHNICAL REQUIREMENTS:
 MAINTAIN ORIGINAL:
 - Camera angle MUST stay identical
 - Camera distance MUST stay identical
-- Product viewing side MUST stay identical
 - Product proportions remain accurate
 - No distortion or stretching
-- No rotation, flipping, or perspective changes
+- No rotation or perspective changes
 - No zooming in or out
+- Horizontal flip ONLY allowed to ensure toe points left
 
 OUTPUT STYLE:
 - Clean, minimal aesthetic
@@ -110,8 +115,8 @@ OUTPUT STYLE:
 - Optimized for website product pages
 - No people, hands, or styling props visible
 
-TRANSFORM ONLY: lighting quality, background to pure white/light gray, centering, add subtle shadow
-NEVER CHANGE: camera position, viewing angle, product orientation, zoom level`;
+TRANSFORM ONLY: lighting quality, background to pure white/light gray, centering, add subtle shadow, horizontal flip if shoe toe points right
+NEVER CHANGE: camera angle, camera distance, product proportions, zoom level`;
 
 // Accessoires-Profil: Für Taschen, Rucksäcke, Gürtel, Mützen etc.
 export const ACCESSORIES_PROMPT = `Professional e-commerce product photography for accessories (bags, backpacks, wallets, belts, hats, beanies) with these EXACT specifications:
