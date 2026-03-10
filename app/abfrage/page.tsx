@@ -208,72 +208,7 @@ export default function AbfragePage() {
                   </div>
 
                   {/* Alle Varianten */}
-                  <div className="border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden">
-                    <div className="bg-zinc-50 dark:bg-zinc-900 px-4 py-3 border-b border-zinc-200 dark:border-zinc-800">
-                      <p className="text-sm font-medium">Alle Varianten</p>
-                    </div>
-                    <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                      {inventoryData.variants.map((variant) => {
-                        const isScanned = variant.barcode === scannedEan;
-                        return (
-                          <div
-                            key={variant.variantId}
-                            className={`p-3 ${isScanned ? 'bg-blue-50/50 dark:bg-blue-900/10' : ''}`}
-                          >
-                            <div className="flex justify-between items-start">
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-2">
-                                  <p className="text-sm font-medium truncate">
-                                    {variant.color && variant.size
-                                      ? `${variant.color} / ${variant.size}`
-                                      : variant.title}
-                                  </p>
-                                  {isScanned && (
-                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 flex-shrink-0">
-                                      Gescannt
-                                    </span>
-                                  )}
-                                </div>
-                                {variant.sku && (
-                                  <p className="text-xs text-zinc-400 mt-0.5">SKU: {variant.sku}</p>
-                                )}
-                                {variant.barcode && (
-                                  <p className="text-xs text-zinc-400">EAN: {variant.barcode}</p>
-                                )}
-                              </div>
-                              <div className="text-right ml-3 flex-shrink-0">
-                                <span className={`text-sm font-bold ${
-                                  variant.inventoryQuantity > 0
-                                    ? 'text-green-600 dark:text-green-400'
-                                    : 'text-red-500 dark:text-red-400'
-                                }`}>
-                                  {variant.inventoryQuantity}
-                                </span>
-                                <p className="text-[10px] text-zinc-400">verfuegbar</p>
-                              </div>
-                            </div>
-
-                            {/* Lager pro Variante */}
-                            {variant.inventoryLevels.length > 0 && (
-                              <div className="mt-2 space-y-1">
-                                {variant.inventoryLevels.map((level) => (
-                                  <div
-                                    key={level.locationName}
-                                    className="flex justify-between items-center text-xs text-zinc-500 pl-2 border-l-2 border-zinc-200 dark:border-zinc-700"
-                                  >
-                                    <span>{level.locationName}</span>
-                                    <span className={level.available > 0 ? 'text-zinc-700 dark:text-zinc-300' : 'text-zinc-400'}>
-                                      {level.available}
-                                    </span>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
+                  <VariantList variants={inventoryData.variants} scannedEan={scannedEan} />
                 </>
               )}
             </>
@@ -301,6 +236,145 @@ export default function AbfragePage() {
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Klickbare Varianten-Liste mit Lager-Detail */
+function VariantList({
+  variants,
+  scannedEan,
+}: {
+  readonly variants: readonly VariantInventory[];
+  readonly scannedEan: string | null;
+}) {
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  const toggle = (variantId: string) => {
+    setExpandedId((prev) => (prev === variantId ? null : variantId));
+  };
+
+  return (
+    <div className="border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden">
+      <div className="bg-zinc-50 dark:bg-zinc-900 px-4 py-3 border-b border-zinc-200 dark:border-zinc-800">
+        <p className="text-sm font-medium">Alle Varianten</p>
+        <p className="text-xs text-zinc-400 mt-0.5">Antippen fuer Details</p>
+      </div>
+      <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+        {variants.map((variant) => {
+          const isScanned = variant.barcode === scannedEan;
+          const isExpanded = expandedId === variant.variantId;
+          const hasStock = variant.inventoryQuantity > 0;
+
+          return (
+            <button
+              key={variant.variantId}
+              onClick={() => toggle(variant.variantId)}
+              className={`w-full text-left p-3 transition-colors ${
+                isScanned
+                  ? 'bg-blue-50/50 dark:bg-blue-900/10'
+                  : isExpanded
+                    ? 'bg-zinc-50/50 dark:bg-zinc-900/50'
+                    : ''
+              }`}
+            >
+              {/* Kopfzeile */}
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <svg
+                    className={`w-3.5 h-3.5 text-zinc-400 transition-transform flex-shrink-0 ${
+                      isExpanded ? 'rotate-90' : ''
+                    }`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                  <p className="text-sm font-medium truncate">
+                    {variant.color && variant.size
+                      ? `${variant.color} / ${variant.size}`
+                      : variant.title}
+                  </p>
+                  {isScanned && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 flex-shrink-0">
+                      Gescannt
+                    </span>
+                  )}
+                </div>
+                <span className={`text-sm font-bold ml-3 flex-shrink-0 ${
+                  hasStock
+                    ? 'text-green-600 dark:text-green-400'
+                    : 'text-red-500 dark:text-red-400'
+                }`}>
+                  {variant.inventoryQuantity}
+                </span>
+              </div>
+
+              {/* Aufgeklapptes Detail */}
+              {isExpanded && (
+                <div className="mt-3 ml-5.5 space-y-2 border-t border-zinc-100 dark:border-zinc-800 pt-3">
+                  {variant.sku && (
+                    <div className="flex justify-between text-xs">
+                      <span className="text-zinc-500">SKU</span>
+                      <span className="font-medium">{variant.sku}</span>
+                    </div>
+                  )}
+                  {variant.barcode && (
+                    <div className="flex justify-between text-xs">
+                      <span className="text-zinc-500">EAN</span>
+                      <span className="font-medium">{variant.barcode}</span>
+                    </div>
+                  )}
+                  {variant.price && (
+                    <div className="flex justify-between text-xs">
+                      <span className="text-zinc-500">Preis</span>
+                      <span className="font-medium">{variant.price} EUR</span>
+                    </div>
+                  )}
+
+                  {/* Lager-Standorte */}
+                  {variant.inventoryLevels.length > 0 ? (
+                    <div className="mt-2">
+                      <p className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider mb-1.5">
+                        Lager / Filiale
+                      </p>
+                      <div className="space-y-1.5">
+                        {variant.inventoryLevels.map((level) => (
+                          <div
+                            key={level.locationName}
+                            className="flex justify-between items-center text-xs pl-2 border-l-2 border-zinc-200 dark:border-zinc-700"
+                          >
+                            <span className="text-zinc-600 dark:text-zinc-400">{level.locationName}</span>
+                            <span className={`font-semibold ${
+                              level.available > 0
+                                ? 'text-green-600 dark:text-green-400'
+                                : 'text-red-500 dark:text-red-400'
+                            }`}>
+                              {level.available}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex justify-between text-xs">
+                      <span className="text-zinc-500">Bestand</span>
+                      <span className={`font-semibold ${
+                        hasStock
+                          ? 'text-green-600 dark:text-green-400'
+                          : 'text-red-500 dark:text-red-400'
+                      }`}>
+                        {variant.inventoryQuantity} verfuegbar
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

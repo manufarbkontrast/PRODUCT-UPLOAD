@@ -1,7 +1,31 @@
 // Shopify Admin API Client
 // Verwendet für EAN-Lookup und Produktdaten-Synchronisation
 
-const API_VERSION = '2024-01';
+const API_VERSION = '2024-10';
+
+// Shopify Location-IDs auf lesbare Namen mappen
+// Kann ueber SHOPIFY_LOCATION_NAMES env var konfiguriert werden:
+// Format: "gid://shopify/Location/123=Lager Berlin,gid://shopify/Location/456=Filiale Hamburg"
+function getLocationNames(): Map<string, string> {
+  const envNames = process.env.SHOPIFY_LOCATION_NAMES ?? '';
+  const map = new Map<string, string>();
+
+  if (envNames) {
+    for (const entry of envNames.split(',')) {
+      const [id, name] = entry.split('=');
+      if (id?.trim() && name?.trim()) {
+        map.set(id.trim(), name.trim());
+      }
+    }
+  }
+
+  return map;
+}
+
+function resolveLocationName(locationId: string): string {
+  const names = getLocationNames();
+  return names.get(locationId) ?? `Standort ${locationId.split('/').pop()}`;
+}
 
 // Getter-Funktionen um Umgebungsvariablen zur Laufzeit zu lesen
 function getStoreDomain(): string | undefined {
@@ -424,6 +448,7 @@ export async function findProductInventory(barcode: string): Promise<ProductInve
     const productId = productNode.id;
 
     // Schritt 2: Alle Varianten mit Inventory Levels laden
+    // Hinweis: location.name braucht read_locations Scope, daher nur location.id
     const inventoryQuery = `
       query getProductInventory($productId: ID!) {
         product(id: $productId) {
@@ -453,7 +478,6 @@ export async function findProductInventory(barcode: string): Promise<ProductInve
                         }
                         location {
                           id
-                          name
                         }
                       }
                     }
@@ -511,7 +535,7 @@ export async function findProductInventory(barcode: string): Promise<ProductInve
               edges: readonly {
                 node: {
                   quantities: readonly { name: string; quantity: number }[];
-                  location: { id: string; name: string };
+                  location: { id: string };
                 };
               }[];
             };
@@ -533,13 +557,13 @@ export async function findProductInventory(barcode: string): Promise<ProductInve
           (le: {
             node: {
               quantities: readonly { name: string; quantity: number }[];
-              location: { id: string; name: string };
+              location: { id: string };
             };
           }) => {
             const availableQty =
               le.node.quantities.find((q) => q.name === 'available')?.quantity ?? 0;
             return {
-              locationName: le.node.location.name,
+              locationName: resolveLocationName(le.node.location.id),
               locationId: le.node.location.id,
               available: availableQty,
             };
