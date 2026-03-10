@@ -101,10 +101,11 @@ export async function POST(
       .eq('product_id', id);
 
     if (useDirectProcessing) {
-      // Direkte Verarbeitung: Gemini direkt aufrufen (kein HTTP Self-Call)
+      // Parallele Verarbeitung: Alle Bilder gleichzeitig mit Gemini verarbeiten
+      // Vermeidet 60s Vercel-Timeout bei mehreren Bildern
       const startTime = Date.now();
 
-      for (const img of product.images) {
+      const processOne = async (img: { id: string; filename: string; original_path: string }) => {
         const imageUrl = img.original_path.startsWith('http')
           ? img.original_path
           : supabase.storage.from('product-images').getPublicUrl(img.original_path).data.publicUrl;
@@ -114,8 +115,6 @@ export async function POST(
 
           const processed = await processImageWithGemini(imageUrl, product.category);
 
-          // Upload verarbeitetes Bild zu Supabase Storage
-          // Use image ID to avoid filename collisions (all uploads may be named "image.jpg")
           const processedFilename = `${img.id}_processed.${processed.format}`;
           const storagePath = `${id}/${processedFilename}`;
 
@@ -134,12 +133,6 @@ export async function POST(
             .from('processed-images')
             .getPublicUrl(storagePath);
 
-          // Verify the URL is accessible before saving
-          const verifyRes = await fetch(urlData.publicUrl, { method: 'HEAD' }).catch(() => null);
-          if (!verifyRes || !verifyRes.ok) {
-            console.warn(`[Process] Processed URL not reachable, but continuing: ${urlData.publicUrl}`);
-          }
-
           await supabase
             .from('product_images')
             .update({
@@ -148,7 +141,7 @@ export async function POST(
             })
             .eq('id', img.id);
 
-          console.log(`[Process] Bild ${img.id} erfolgreich verarbeitet (${((Date.now() - startTime) / 1000).toFixed(1)}s elapsed)`);
+          console.log(`[Process] Bild ${img.id} erfolgreich (${((Date.now() - startTime) / 1000).toFixed(1)}s)`);
         } catch (err) {
           console.error(`[Process] Fehler bei Bild ${img.id}:`, err);
           await supabase
@@ -156,7 +149,10 @@ export async function POST(
             .update({ status: 'error' })
             .eq('id', img.id);
         }
-      }
+      };
+
+      // Alle Bilder parallel verarbeiten
+      await Promise.allSettled(product.images.map(processOne));
 
       const elapsedSeconds = (Date.now() - startTime) / 1000;
 
