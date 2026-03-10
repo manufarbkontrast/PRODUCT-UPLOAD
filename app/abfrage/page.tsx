@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import EanScanner from '@/components/EanScanner';
 import type { EanLookupResult } from '@/config/ean-lookup-mappings';
@@ -42,48 +42,55 @@ export default function AbfragePage() {
   const [scannedEan, setScannedEan] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
   const [loadingInventory, setLoadingInventory] = useState(false);
+  const [showScanner, setShowScanner] = useState(true);
 
   const handleEanScan = (ean: string) => {
     setScannedEan(ean);
     setProductInfo(null);
     setInventoryData(null);
+    setShowScanner(false);
     setSearching(true);
     setLoadingInventory(false);
   };
 
-  const handleLookupResult = useCallback((result: EanLookupResult) => {
-    setSearching(false);
-    if (scannedEan) {
-      setProductInfo({ ean: scannedEan, lookup: result });
-    }
-  }, [scannedEan]);
-
-  // Bestandsdaten laden wenn Produkt gefunden
+  // Lookup + Inventory parallel laden wenn EAN gescannt
   useEffect(() => {
-    if (!productInfo?.lookup.found || !scannedEan) return;
+    if (!scannedEan || !searching) return;
 
-    const fetchInventory = async () => {
-      setLoadingInventory(true);
+    const fetchData = async () => {
       try {
-        const res = await fetch('/api/inventory-lookup', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ean: scannedEan }),
-        });
+        // EAN-Lookup und Inventory parallel
+        const [lookupRes, inventoryRes] = await Promise.all([
+          fetch('/api/ean-lookup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ean: scannedEan }),
+          }),
+          fetch('/api/inventory-lookup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ean: scannedEan }),
+          }),
+        ]);
 
-        if (res.ok) {
-          const data = await res.json();
-          setInventoryData(data);
+        const lookupData: EanLookupResult = await lookupRes.json();
+        setProductInfo({ ean: scannedEan, lookup: lookupData });
+
+        if (inventoryRes.ok) {
+          const invData = await inventoryRes.json();
+          setInventoryData(invData);
         }
       } catch (err) {
-        console.warn('[Abfrage] Inventory lookup failed:', err);
+        console.warn('[Abfrage] Lookup failed:', err);
+        setProductInfo({ ean: scannedEan, lookup: { found: false } });
       } finally {
+        setSearching(false);
         setLoadingInventory(false);
       }
     };
 
-    fetchInventory();
-  }, [productInfo, scannedEan]);
+    fetchData();
+  }, [scannedEan, searching]);
 
   const handleReset = () => {
     setProductInfo(null);
@@ -91,6 +98,7 @@ export default function AbfragePage() {
     setScannedEan(null);
     setSearching(false);
     setLoadingInventory(false);
+    setShowScanner(true);
   };
 
   return (
@@ -108,27 +116,32 @@ export default function AbfragePage() {
         <h1 className="text-xl font-semibold">Artikel Abfrage</h1>
       </div>
 
-      {!productInfo && (
+      {/* Scanner nur zeigen wenn noch kein Ergebnis */}
+      {showScanner && (
         <EanScanner
           onScan={handleEanScan}
-          onLookupResult={handleLookupResult}
-          autoLookup={true}
+          autoLookup={false}
         />
       )}
 
+      {/* Ladeanimation */}
       {searching && (
         <div className="text-center py-8">
-          <div className="w-10 h-10 mx-auto mb-3 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
-            <svg className="w-5 h-5 text-zinc-500 animate-spin" viewBox="0 0 24 24">
+          <div className="w-10 h-10 mx-auto mb-3 rounded-full bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center">
+            <svg className="w-5 h-5 text-blue-500 animate-spin" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
             </svg>
           </div>
-          <p className="text-sm text-zinc-500">Artikel wird gesucht...</p>
+          <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+            Artikel wird gesucht...
+          </p>
+          <p className="text-xs text-zinc-500 mt-1">EAN: {scannedEan}</p>
         </div>
       )}
 
-      {productInfo && (
+      {/* Ergebnisse */}
+      {productInfo && !searching && (
         <div className="space-y-4">
           {productInfo.lookup.found ? (
             <>
@@ -170,18 +183,6 @@ export default function AbfragePage() {
               </div>
 
               {/* Bestandsuebersicht */}
-              {loadingInventory && (
-                <div className="border border-zinc-200 dark:border-zinc-800 rounded-xl p-4">
-                  <div className="flex items-center gap-3">
-                    <svg className="w-4 h-4 text-zinc-400 animate-spin" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                    </svg>
-                    <p className="text-sm text-zinc-500">Lagerbestaende werden geladen...</p>
-                  </div>
-                </div>
-              )}
-
               {inventoryData?.found && inventoryData.variants && (
                 <>
                   {/* Gesamt-Bestand */}
