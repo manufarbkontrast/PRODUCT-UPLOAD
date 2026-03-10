@@ -408,9 +408,15 @@ export async function findProductInventory(barcode: string): Promise<ProductInve
     }
 
     const findData = await findResponse.json();
+
+    if (findData.errors) {
+      console.error('Shopify inventory find errors:', JSON.stringify(findData.errors));
+    }
+
     const edges = findData?.data?.productVariants?.edges;
 
     if (!edges || edges.length === 0) {
+      console.error('Shopify inventory: no variant found for barcode:', barcode);
       return { found: false };
     }
 
@@ -480,8 +486,9 @@ export async function findProductInventory(barcode: string): Promise<ProductInve
     const invData = await invResponse.json();
 
     if (invData.errors) {
-      console.error('Shopify inventory GraphQL errors:', invData.errors);
-      return { found: false };
+      console.error('Shopify inventory GraphQL errors:', JSON.stringify(invData.errors));
+      // Fallback: Ohne inventoryLevels versuchen
+      return await findProductInventorySimple(graphqlUrl, accessToken, productId, barcode);
     }
 
     const product = invData?.data?.product;
@@ -566,6 +573,112 @@ export async function findProductInventory(barcode: string): Promise<ProductInve
     };
   } catch (error) {
     console.error('Shopify inventory lookup error:', error);
+    return { found: false };
+  }
+}
+
+/**
+ * Fallback: Varianten ohne inventoryLevels (fuer aeltere API-Versionen)
+ */
+async function findProductInventorySimple(
+  graphqlUrl: string,
+  accessToken: string,
+  productId: string,
+  barcode: string
+): Promise<ProductInventoryResult> {
+  const simpleQuery = `
+    query getProductInventory($productId: ID!) {
+      product(id: $productId) {
+        title
+        vendor
+        productType
+        variants(first: 100) {
+          edges {
+            node {
+              id
+              title
+              barcode
+              sku
+              price
+              inventoryQuantity
+              selectedOptions {
+                name
+                value
+              }
+            }
+          }
+        }
+      }
+    }
+  `;
+
+  try {
+    const res = await fetch(graphqlUrl, {
+      method: 'POST',
+      headers: {
+        'X-Shopify-Access-Token': accessToken,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        query: simpleQuery,
+        variables: { productId },
+      }),
+    });
+
+    if (!res.ok) return { found: false };
+
+    const data = await res.json();
+    const product = data?.data?.product;
+    if (!product) return { found: false };
+
+    const variants: VariantInventory[] = (product.variants?.edges ?? []).map(
+      (edge: {
+        node: {
+          id: string;
+          title: string;
+          barcode: string | null;
+          sku: string | null;
+          price: string | null;
+          inventoryQuantity: number;
+          selectedOptions: readonly { name: string; value: string }[];
+        };
+      }) => {
+        const v = edge.node;
+        const options = v.selectedOptions ?? [];
+        const colorOpt = options.find((o) =>
+          ['color', 'colour', 'farbe'].includes(o.name.toLowerCase())
+        );
+        const sizeOpt = options.find((o) =>
+          ['size', 'größe', 'groesse'].includes(o.name.toLowerCase())
+        );
+
+        return {
+          variantId: v.id,
+          title: v.title,
+          barcode: v.barcode,
+          sku: v.sku,
+          price: v.price,
+          color: colorOpt?.value ?? null,
+          size: sizeOpt?.value ?? null,
+          inventoryQuantity: v.inventoryQuantity,
+          inventoryLevels: [],
+        };
+      }
+    );
+
+    const totalInventory = variants.reduce((sum, v) => sum + v.inventoryQuantity, 0);
+
+    return {
+      found: true,
+      productTitle: product.title,
+      vendor: product.vendor,
+      productType: product.productType,
+      matchedBarcode: barcode,
+      totalInventory,
+      variants,
+    };
+  } catch (error) {
+    console.error('Shopify simple inventory lookup error:', error);
     return { found: false };
   }
 }
