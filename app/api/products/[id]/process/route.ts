@@ -4,6 +4,7 @@ import { categoryImageType, getImageSpecsForCategory } from '@/config/image-proc
 import { processImageWithGemini } from '@/lib/gemini-processor';
 import { N8N_HEALTH_CHECK_TIMEOUT_MS } from '@/config/constants';
 import { requireUser } from '@/lib/auth/require-user';
+import { validateAdminToken } from '@/lib/admin-auth';
 
 // Vercel Functions können bis zu 60s laufen (Hobby) / 300s (Pro)
 export const maxDuration = 60;
@@ -12,8 +13,12 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { error: authError } = await requireUser();
-  if (authError) return authError;
+  // Allow either user session or admin token
+  const adminError = validateAdminToken(request);
+  if (adminError) {
+    const { error: authError } = await requireUser();
+    if (authError) return authError;
+  }
 
   const { id } = await params;
 
