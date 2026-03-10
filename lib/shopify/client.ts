@@ -327,6 +327,249 @@ function extractOption(
   return undefined;
 }
 
+// ─── Inventory & Varianten-Abfrage ──────────────────────────────────────────
+
+export interface InventoryLevel {
+  readonly locationName: string;
+  readonly locationId: string;
+  readonly available: number;
+}
+
+export interface VariantInventory {
+  readonly variantId: string;
+  readonly title: string;
+  readonly barcode: string | null;
+  readonly sku: string | null;
+  readonly price: string | null;
+  readonly color: string | null;
+  readonly size: string | null;
+  readonly inventoryQuantity: number;
+  readonly inventoryLevels: readonly InventoryLevel[];
+}
+
+export interface ProductInventoryResult {
+  readonly found: boolean;
+  readonly productTitle?: string;
+  readonly vendor?: string;
+  readonly productType?: string;
+  readonly matchedBarcode?: string;
+  readonly totalInventory?: number;
+  readonly variants?: readonly VariantInventory[];
+}
+
+/**
+ * Holt alle Varianten eines Produkts mit Lagerbestaenden pro Standort.
+ * Sucht zuerst die passende Variante per Barcode, dann alle Varianten des Produkts.
+ */
+export async function findProductInventory(barcode: string): Promise<ProductInventoryResult> {
+  const storeDomain = getStoreDomain();
+  const accessToken = getAccessToken();
+
+  if (!storeDomain || !accessToken) {
+    return { found: false };
+  }
+
+  const graphqlUrl = `https://${storeDomain}/admin/api/${API_VERSION}/graphql.json`;
+
+  // Schritt 1: Produkt-ID ueber Barcode finden
+  const findQuery = `
+    query findProductByBarcode($barcode: String!) {
+      productVariants(first: 1, query: $barcode) {
+        edges {
+          node {
+            product {
+              id
+              title
+              vendor
+              productType
+            }
+          }
+        }
+      }
+    }
+  `;
+
+  try {
+    const findResponse = await fetch(graphqlUrl, {
+      method: 'POST',
+      headers: {
+        'X-Shopify-Access-Token': accessToken,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        query: findQuery,
+        variables: { barcode: `barcode:${barcode}` },
+      }),
+    });
+
+    if (!findResponse.ok) {
+      console.error(`Shopify inventory lookup error: ${findResponse.status}`);
+      return { found: false };
+    }
+
+    const findData = await findResponse.json();
+    const edges = findData?.data?.productVariants?.edges;
+
+    if (!edges || edges.length === 0) {
+      return { found: false };
+    }
+
+    const productNode = edges[0].node.product;
+    const productId = productNode.id;
+
+    // Schritt 2: Alle Varianten mit Inventory Levels laden
+    const inventoryQuery = `
+      query getProductInventory($productId: ID!) {
+        product(id: $productId) {
+          title
+          vendor
+          productType
+          variants(first: 100) {
+            edges {
+              node {
+                id
+                title
+                barcode
+                sku
+                price
+                inventoryQuantity
+                selectedOptions {
+                  name
+                  value
+                }
+                inventoryItem {
+                  inventoryLevels(first: 20) {
+                    edges {
+                      node {
+                        quantities(names: ["available"]) {
+                          name
+                          quantity
+                        }
+                        location {
+                          id
+                          name
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    `;
+
+    const invResponse = await fetch(graphqlUrl, {
+      method: 'POST',
+      headers: {
+        'X-Shopify-Access-Token': accessToken,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        query: inventoryQuery,
+        variables: { productId },
+      }),
+    });
+
+    if (!invResponse.ok) {
+      console.error(`Shopify inventory query error: ${invResponse.status}`);
+      return { found: false };
+    }
+
+    const invData = await invResponse.json();
+
+    if (invData.errors) {
+      console.error('Shopify inventory GraphQL errors:', invData.errors);
+      return { found: false };
+    }
+
+    const product = invData?.data?.product;
+    if (!product) {
+      return { found: false };
+    }
+
+    const variants: VariantInventory[] = (product.variants?.edges ?? []).map(
+      (edge: {
+        node: {
+          id: string;
+          title: string;
+          barcode: string | null;
+          sku: string | null;
+          price: string | null;
+          inventoryQuantity: number;
+          selectedOptions: readonly { name: string; value: string }[];
+          inventoryItem?: {
+            inventoryLevels?: {
+              edges: readonly {
+                node: {
+                  quantities: readonly { name: string; quantity: number }[];
+                  location: { id: string; name: string };
+                };
+              }[];
+            };
+          };
+        };
+      }) => {
+        const v = edge.node;
+        const options = v.selectedOptions ?? [];
+        const colorOpt = options.find((o) =>
+          ['color', 'colour', 'farbe'].includes(o.name.toLowerCase())
+        );
+        const sizeOpt = options.find((o) =>
+          ['size', 'größe', 'groesse'].includes(o.name.toLowerCase())
+        );
+
+        const levels: InventoryLevel[] = (
+          v.inventoryItem?.inventoryLevels?.edges ?? []
+        ).map(
+          (le: {
+            node: {
+              quantities: readonly { name: string; quantity: number }[];
+              location: { id: string; name: string };
+            };
+          }) => {
+            const availableQty =
+              le.node.quantities.find((q) => q.name === 'available')?.quantity ?? 0;
+            return {
+              locationName: le.node.location.name,
+              locationId: le.node.location.id,
+              available: availableQty,
+            };
+          }
+        );
+
+        return {
+          variantId: v.id,
+          title: v.title,
+          barcode: v.barcode,
+          sku: v.sku,
+          price: v.price,
+          color: colorOpt?.value ?? null,
+          size: sizeOpt?.value ?? null,
+          inventoryQuantity: v.inventoryQuantity,
+          inventoryLevels: levels,
+        };
+      }
+    );
+
+    const totalInventory = variants.reduce((sum, v) => sum + v.inventoryQuantity, 0);
+
+    return {
+      found: true,
+      productTitle: product.title,
+      vendor: product.vendor,
+      productType: product.productType,
+      matchedBarcode: barcode,
+      totalInventory,
+      variants,
+    };
+  } catch (error) {
+    console.error('Shopify inventory lookup error:', error);
+    return { found: false };
+  }
+}
+
 /**
  * Entfernt HTML-Tags aus einem String
  */
