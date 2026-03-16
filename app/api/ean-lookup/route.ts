@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const cleanedEan = ean.replace(/\D/g, '').trim();
+    const cleanedEan = ean.trim();
 
     // Nur Shopify-Suche - keine andere Datenquelle
     if (!isShopifyConfigured()) {

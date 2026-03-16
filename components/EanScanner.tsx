@@ -168,17 +168,18 @@ export default function EanScanner({ onScan, onSkip, onLookupResult, autoLookup 
   }, [mode, stopCamera, startCamera]);
 
   const validateEan = (ean: string): boolean => {
-    const cleaned = ean.replace(/\D/g, '');
-    return cleaned.length >= 8 && cleaned.length <= 14;
+    const trimmed = ean.trim();
+    // Mindestens 3 Zeichen — eigene Artikelnummern erlauben
+    return trimmed.length >= 3;
   };
 
   const handleManualSubmit = () => {
-    const cleaned = manualEan.replace(/\D/g, '');
-    if (!validateEan(cleaned)) {
-      setError('EAN muss 8-14 Ziffern haben');
+    const trimmed = manualEan.trim();
+    if (!validateEan(trimmed)) {
+      setError('Artikelnummer muss mindestens 3 Zeichen haben');
       return;
     }
-    handleEanDetected(cleaned);
+    handleEanDetected(trimmed);
   };
 
   // Lookup Status Overlay
@@ -330,12 +331,11 @@ export default function EanScanner({ onScan, onSkip, onLookupResult, autoLookup 
     <div className="space-y-4">
       <div>
         <label className="block text-sm font-medium mb-1 text-zinc-700 dark:text-zinc-300">
-          EAN / Barcode-Nummer
+          EAN / Artikelnummer
         </label>
         <input
           type="text"
-          inputMode="numeric"
-          pattern="[0-9]*"
+          inputMode="text"
           value={manualEan}
           onChange={(e) => {
             setManualEan(e.target.value);
@@ -344,7 +344,7 @@ export default function EanScanner({ onScan, onSkip, onLookupResult, autoLookup 
           onKeyDown={(e) => {
             if (e.key === 'Enter') handleManualSubmit();
           }}
-          placeholder="z.B. 4012345678901"
+          placeholder="z.B. 4012345678901 oder eigene Nr."
           className="w-full px-3 py-2 text-base border rounded-lg bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700 focus:outline-none focus:ring-2 focus:ring-zinc-500"
           autoFocus
         />

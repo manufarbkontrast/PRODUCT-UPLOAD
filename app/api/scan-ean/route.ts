@@ -49,7 +49,7 @@ If no barcode is found, respond with exactly "NONE".`,
     const text = (result.response.text() ?? '').trim();
 
     // Check if a valid barcode was found
-    if (text === 'NONE' || text.length < 8 || text.length > 14 || !/^\d+$/.test(text)) {
+    if (text === 'NONE' || text.length < 3) {
       return NextResponse.json({
         ean: null,
         message: 'Kein Barcode erkannt. Bitte manuell eingeben.',
