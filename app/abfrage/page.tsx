@@ -470,6 +470,49 @@ function LocationSummary({ variants }: { readonly variants: readonly VariantInve
   );
 }
 
+/**
+ * Extrahiert die Groesse aus einer JTL-SKU.
+ * "7061-2084841-256-44" → "44"
+ * "18533-CD520-W32/L34" → "W32/L34"
+ */
+function extractSize(sku: string): string {
+  // Suche nach Groessen-Pattern am Ende: -44, -W32/L34, -39, etc.
+  const match = sku.match(/-([\w/]+)$/);
+  return match ? match[1] : sku;
+}
+
+/** JTL Lager-Zusammenfassung ueber alle Varianten */
+function JtlLocationSummary({ variants }: { readonly variants: readonly JtlArticle[] }) {
+  const locationTotals = new Map<string, number>();
+
+  for (const v of variants) {
+    for (const loc of v.stockLocations) {
+      const current = locationTotals.get(loc.locationName) ?? 0;
+      locationTotals.set(loc.locationName, current + loc.available);
+    }
+  }
+
+  if (locationTotals.size === 0) return null;
+
+  return (
+    <div className="p-4 space-y-2">
+      <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Lager</p>
+      {Array.from(locationTotals.entries()).map(([name, total]) => (
+        <div key={name} className="flex justify-between items-center">
+          <span className="text-sm">{name}</span>
+          <span className={`text-sm font-semibold ${
+            total > 0
+              ? 'text-green-600 dark:text-green-400'
+              : 'text-red-500 dark:text-red-400'
+          }`}>
+            {total}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /** JTL Artikel-Ergebnis */
 function JtlResultCard({
   article,
@@ -508,50 +551,18 @@ function JtlResultCard({
           {article.gtin && <InfoRow label="GTIN" value={article.gtin} />}
           {article.ownIdentifier && <InfoRow label="Eigene Nr." value={article.ownIdentifier} />}
           <InfoRow label="VK (UVP)" value={`${article.suggestedRetailPrice.toFixed(2)} EUR`} />
-          <InfoRow label="VK (Netto)" value={`${article.salesPriceNet.toFixed(2)} EUR`} />
           <InfoRow label="EK (Netto)" value={`${article.purchasePriceNet.toFixed(2)} EUR`} />
           {article.zalandoPrice && <InfoRow label="Zalando" value={`${article.zalandoPrice} EUR`} />}
-          <InfoRow
-            label="Bestand (verfuegbar)"
-            value={String(article.availableStock)}
-            highlight={article.availableStock <= 0}
-          />
           {article.countryOfOrigin && <InfoRow label="Herkunft" value={article.countryOfOrigin} />}
-
-          {/* Lager-Aufschlüsselung */}
-          {article.stockLocations.length > 1 && (
-            <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800">
-              <p className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider mb-2">
-                Lager / Filiale
-              </p>
-              <div className="space-y-1.5">
-                {article.stockLocations.map((loc) => (
-                  <div
-                    key={loc.storeNumber}
-                    className="flex justify-between items-center text-xs pl-2 border-l-2 border-blue-200 dark:border-blue-800"
-                  >
-                    <span className="text-zinc-600 dark:text-zinc-400">{loc.locationName}</span>
-                    <span className={`font-semibold ${
-                      loc.available > 0
-                        ? 'text-green-600 dark:text-green-400'
-                        : 'text-red-500 dark:text-red-400'
-                    }`}>
-                      {loc.available}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
-      {/* Varianten */}
+      {/* Varianten mit Gesamtbestand und Lager-Zusammenfassung */}
       {variantList && (
         <div className="border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden">
           <div className="bg-zinc-50 dark:bg-zinc-900 px-4 py-3 border-b border-zinc-200 dark:border-zinc-800">
             <div className="flex justify-between items-center">
-              <p className="text-sm font-medium">JTL Gesamtbestand</p>
+              <p className="text-sm font-medium">JTL Bestand</p>
               <span className={`text-lg font-bold ${
                 stock > 0
                   ? 'text-green-600 dark:text-green-400'
@@ -561,104 +572,133 @@ function JtlResultCard({
               </span>
             </div>
             <p className="text-xs text-zinc-500 mt-0.5">
-              {variantList.length} Variante{variantList.length !== 1 ? 'n' : ''}
+              {variantList.length} Groesse{variantList.length !== 1 ? 'n' : ''}
             </p>
           </div>
-          <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
-            {variantList.map((v) => {
-              const isScanned =
-                v.gtin === scannedEan ||
-                v.sku === scannedEan;
-              const isExpanded = expandedSku === v.sku;
-              const hasStock = v.availableStock > 0;
 
-              return (
-                <button
-                  key={v.sku}
-                  onClick={() => setExpandedSku(isExpanded ? null : v.sku)}
-                  className={`w-full text-left p-3 transition-colors ${
-                    isScanned
-                      ? 'bg-blue-50/50 dark:bg-blue-900/10'
-                      : isExpanded
-                        ? 'bg-zinc-50/50 dark:bg-zinc-900/50'
-                        : ''
-                  }`}
-                >
-                  <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-2 min-w-0 flex-1">
-                      <svg
-                        className={`w-3.5 h-3.5 text-zinc-400 transition-transform flex-shrink-0 ${
-                          isExpanded ? 'rotate-90' : ''
-                        }`}
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                      <p className="text-sm font-medium truncate">{v.sku}</p>
-                      {isScanned && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 flex-shrink-0">
-                          Gescannt
-                        </span>
-                      )}
+          {/* Lager-Zusammenfassung */}
+          <JtlLocationSummary variants={variantList} />
+
+          {/* Groessen-Liste */}
+          <div className="border-t border-zinc-200 dark:border-zinc-800">
+            <div className="px-4 py-2 bg-zinc-50 dark:bg-zinc-900">
+              <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Groessen</p>
+            </div>
+            <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+              {variantList.map((v) => {
+                const size = extractSize(v.sku);
+                const isScanned = v.sku === article.sku;
+                const isExpanded = expandedSku === v.sku;
+                const hasStock = v.availableStock > 0;
+
+                return (
+                  <button
+                    key={v.sku}
+                    onClick={() => setExpandedSku(isExpanded ? null : v.sku)}
+                    className={`w-full text-left px-4 py-2.5 transition-colors ${
+                      isScanned
+                        ? 'bg-blue-50/50 dark:bg-blue-900/10'
+                        : isExpanded
+                          ? 'bg-zinc-50/50 dark:bg-zinc-900/50'
+                          : ''
+                    }`}
+                  >
+                    <div className="flex justify-between items-center">
+                      <div className="flex items-center gap-2">
+                        <svg
+                          className={`w-3 h-3 text-zinc-400 transition-transform flex-shrink-0 ${
+                            isExpanded ? 'rotate-90' : ''
+                          }`}
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                        <span className="text-sm font-medium">{size}</span>
+                        {isScanned && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                            Gescannt
+                          </span>
+                        )}
+                      </div>
+                      <span className={`text-sm font-bold ${
+                        hasStock
+                          ? 'text-green-600 dark:text-green-400'
+                          : 'text-red-500 dark:text-red-400'
+                      }`}>
+                        {v.availableStock}
+                      </span>
                     </div>
-                    <span className={`text-sm font-bold ml-3 flex-shrink-0 ${
-                      hasStock
-                        ? 'text-green-600 dark:text-green-400'
-                        : 'text-red-500 dark:text-red-400'
-                    }`}>
-                      {v.availableStock}
-                    </span>
-                  </div>
 
-                  {isExpanded && (
-                    <div className="mt-3 ml-5.5 space-y-2 border-t border-zinc-100 dark:border-zinc-800 pt-3">
-                      {v.gtin && (
+                    {isExpanded && (
+                      <div className="mt-2 ml-5 space-y-1.5 border-t border-zinc-100 dark:border-zinc-800 pt-2">
                         <div className="flex justify-between text-xs">
-                          <span className="text-zinc-500">GTIN</span>
-                          <span className="font-medium">{v.gtin}</span>
+                          <span className="text-zinc-500">SKU</span>
+                          <span className="font-medium">{v.sku}</span>
                         </div>
-                      )}
-                      <div className="flex justify-between text-xs">
-                        <span className="text-zinc-500">VK (UVP)</span>
-                        <span className="font-medium">{v.suggestedRetailPrice.toFixed(2)} EUR</span>
-                      </div>
-                      <div className="flex justify-between text-xs">
-                        <span className="text-zinc-500">EK (Netto)</span>
-                        <span className="font-medium">{v.purchasePriceNet.toFixed(2)} EUR</span>
-                      </div>
-
-                      {/* Lager pro Variante */}
-                      {v.stockLocations.length > 0 && (
-                        <div className="mt-2">
-                          <p className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider mb-1.5">
-                            Lager / Filiale
-                          </p>
-                          <div className="space-y-1.5">
-                            {v.stockLocations.map((loc) => (
-                              <div
-                                key={loc.storeNumber}
-                                className="flex justify-between items-center text-xs pl-2 border-l-2 border-zinc-200 dark:border-zinc-700"
-                              >
-                                <span className="text-zinc-600 dark:text-zinc-400">{loc.locationName}</span>
-                                <span className={`font-semibold ${
-                                  loc.available > 0
-                                    ? 'text-green-600 dark:text-green-400'
-                                    : 'text-red-500 dark:text-red-400'
-                                }`}>
-                                  {loc.available}
-                                </span>
-                              </div>
-                            ))}
+                        {v.gtin && (
+                          <div className="flex justify-between text-xs">
+                            <span className="text-zinc-500">GTIN</span>
+                            <span className="font-medium">{v.gtin}</span>
                           </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </button>
-              );
-            })}
+                        )}
+                        {v.stockLocations.map((loc) => (
+                          <div
+                            key={loc.storeNumber}
+                            className="flex justify-between items-center text-xs pl-2 border-l-2 border-zinc-200 dark:border-zinc-700"
+                          >
+                            <span className="text-zinc-600 dark:text-zinc-400">{loc.locationName}</span>
+                            <span className={`font-semibold ${
+                              loc.available > 0
+                                ? 'text-green-600 dark:text-green-400'
+                                : 'text-red-500 dark:text-red-400'
+                            }`}>
+                              {loc.available}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Einzelartikel ohne Varianten */}
+      {!variantList && article.stockLocations.length > 1 && (
+        <div className="border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden">
+          <div className="bg-zinc-50 dark:bg-zinc-900 px-4 py-3 border-b border-zinc-200 dark:border-zinc-800">
+            <div className="flex justify-between items-center">
+              <p className="text-sm font-medium">Bestand</p>
+              <span className={`text-lg font-bold ${
+                article.availableStock > 0
+                  ? 'text-green-600 dark:text-green-400'
+                  : 'text-red-600 dark:text-red-400'
+              }`}>
+                {article.availableStock}
+              </span>
+            </div>
+          </div>
+          <div className="p-4 space-y-1.5">
+            {article.stockLocations.map((loc) => (
+              <div
+                key={loc.storeNumber}
+                className="flex justify-between items-center text-xs pl-2 border-l-2 border-blue-200 dark:border-blue-800"
+              >
+                <span className="text-zinc-600 dark:text-zinc-400">{loc.locationName}</span>
+                <span className={`font-semibold ${
+                  loc.available > 0
+                    ? 'text-green-600 dark:text-green-400'
+                    : 'text-red-500 dark:text-red-400'
+                }`}>
+                  {loc.available}
+                </span>
+              </div>
+            ))}
           </div>
         </div>
       )}
