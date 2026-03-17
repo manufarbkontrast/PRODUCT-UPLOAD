@@ -30,6 +30,35 @@ interface InventoryData {
   readonly variants?: readonly VariantInventory[];
 }
 
+interface JtlItem {
+  readonly storeNumber: string;
+  readonly sku: string;
+  readonly name: string;
+  readonly description: string;
+  readonly gtin: string;
+  readonly ownIdentifier: string;
+  readonly manufacturerNumber: string;
+  readonly availableStock: number;
+  readonly totalStock: number;
+  readonly salesPriceNet: number;
+  readonly suggestedRetailPrice: number;
+  readonly purchasePriceNet: number;
+  readonly categories: string;
+  readonly isActive: boolean;
+  readonly parentItemId: string;
+  readonly countryOfOrigin: string;
+  readonly zalandoPrice: string;
+}
+
+interface JtlResult {
+  readonly found: boolean;
+  readonly source: 'jtl';
+  readonly matchField?: string;
+  readonly item?: JtlItem;
+  readonly variants?: readonly JtlItem[];
+  readonly totalStock?: number;
+}
+
 interface ProductInfo {
   readonly ean: string;
   readonly lookup: EanLookupResult;
@@ -39,6 +68,7 @@ export default function AbfragePage() {
   const router = useRouter();
   const [productInfo, setProductInfo] = useState<ProductInfo | null>(null);
   const [inventoryData, setInventoryData] = useState<InventoryData | null>(null);
+  const [jtlResult, setJtlResult] = useState<JtlResult | null>(null);
   const [scannedEan, setScannedEan] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
   const [loadingInventory, setLoadingInventory] = useState(false);
@@ -48,6 +78,7 @@ export default function AbfragePage() {
     setScannedEan(ean);
     setProductInfo(null);
     setInventoryData(null);
+    setJtlResult(null);
     setShowScanner(false);
     setSearching(true);
     setLoadingInventory(false);
@@ -59,14 +90,19 @@ export default function AbfragePage() {
 
     const fetchData = async () => {
       try {
-        // EAN-Lookup und Inventory parallel
-        const [lookupRes, inventoryRes] = await Promise.all([
+        // Shopify + JTL parallel abfragen
+        const [lookupRes, inventoryRes, jtlRes] = await Promise.all([
           fetch('/api/ean-lookup', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ean: scannedEan }),
           }),
           fetch('/api/inventory-lookup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ean: scannedEan }),
+          }),
+          fetch('/api/jtl-lookup', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ean: scannedEan }),
@@ -79,6 +115,11 @@ export default function AbfragePage() {
         if (inventoryRes.ok) {
           const invData = await inventoryRes.json();
           setInventoryData(invData);
+        }
+
+        if (jtlRes.ok) {
+          const jtlData: JtlResult = await jtlRes.json();
+          setJtlResult(jtlData);
         }
       } catch (err) {
         console.warn('[Abfrage] Lookup failed:', err);
@@ -95,6 +136,7 @@ export default function AbfragePage() {
   const handleReset = () => {
     setProductInfo(null);
     setInventoryData(null);
+    setJtlResult(null);
     setScannedEan(null);
     setSearching(false);
     setLoadingInventory(false);
@@ -143,14 +185,30 @@ export default function AbfragePage() {
       {/* Ergebnisse */}
       {productInfo && !searching && (
         <div className="space-y-4">
+          {/* JTL Ergebnis */}
+          {jtlResult?.found && jtlResult.item && (
+            <JtlResultCard
+              item={jtlResult.item}
+              matchField={jtlResult.matchField}
+              variants={jtlResult.variants}
+              totalStock={jtlResult.totalStock}
+              scannedEan={scannedEan}
+            />
+          )}
+
+          {/* Shopify Ergebnis */}
           {productInfo.lookup.found ? (
             <>
-              {/* Artikelinfos */}
               <div className="border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden">
                 <div className="bg-green-50 dark:bg-green-900/20 px-4 py-3 border-b border-zinc-200 dark:border-zinc-800">
-                  <p className="text-sm font-medium text-green-700 dark:text-green-400">
-                    Artikel gefunden
-                  </p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium text-green-700 dark:text-green-400">
+                      Shopify
+                    </p>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                      Gefunden
+                    </span>
+                  </div>
                 </div>
                 <div className="p-4 space-y-3">
                   <InfoRow label="EAN" value={productInfo.ean} />
@@ -182,14 +240,12 @@ export default function AbfragePage() {
                 </div>
               </div>
 
-              {/* Bestandsuebersicht */}
               {inventoryData?.found && inventoryData.variants && (
                 <>
-                  {/* Gesamt-Bestand */}
                   <div className="border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden">
                     <div className="bg-zinc-50 dark:bg-zinc-900 px-4 py-3 border-b border-zinc-200 dark:border-zinc-800">
                       <div className="flex justify-between items-center">
-                        <p className="text-sm font-medium">Gesamtbestand</p>
+                        <p className="text-sm font-medium">Shopify Gesamtbestand</p>
                         <span className={`text-lg font-bold ${
                           (inventoryData.totalInventory ?? 0) > 0
                             ? 'text-green-600 dark:text-green-400'
@@ -202,17 +258,13 @@ export default function AbfragePage() {
                         {inventoryData.variants.length} Variante{inventoryData.variants.length !== 1 ? 'n' : ''} insgesamt
                       </p>
                     </div>
-
-                    {/* Lager-Aufschluesselung */}
                     <LocationSummary variants={inventoryData.variants} />
                   </div>
-
-                  {/* Alle Varianten */}
                   <VariantList variants={inventoryData.variants} scannedEan={scannedEan} />
                 </>
               )}
             </>
-          ) : (
+          ) : !jtlResult?.found ? (
             <div className="border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden">
               <div className="bg-yellow-50 dark:bg-yellow-900/20 px-4 py-3 border-b border-zinc-200 dark:border-zinc-800">
                 <p className="text-sm font-medium text-yellow-700 dark:text-yellow-400">
@@ -222,11 +274,11 @@ export default function AbfragePage() {
               <div className="p-4">
                 <InfoRow label="EAN" value={productInfo.ean} />
                 <p className="text-sm text-zinc-500 mt-3">
-                  Dieser Artikel ist nicht in der Datenbank hinterlegt.
+                  Weder in JTL noch in Shopify gefunden.
                 </p>
               </div>
             </div>
-          )}
+          ) : null}
 
           <button
             onClick={handleReset}
@@ -407,6 +459,165 @@ function LocationSummary({ variants }: { readonly variants: readonly VariantInve
           </span>
         </div>
       ))}
+    </div>
+  );
+}
+
+/** JTL Artikel-Ergebnis */
+function JtlResultCard({
+  item,
+  matchField,
+  variants,
+  totalStock,
+  scannedEan,
+}: {
+  readonly item: JtlItem;
+  readonly matchField?: string;
+  readonly variants?: readonly JtlItem[];
+  readonly totalStock?: number;
+  readonly scannedEan: string | null;
+}) {
+  const [expandedSku, setExpandedSku] = useState<string | null>(null);
+  const stock = totalStock ?? item.availableStock;
+  const variantList = variants && variants.length > 1 ? variants : null;
+
+  return (
+    <div className="space-y-4">
+      {/* Hauptinfo */}
+      <div className="border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden">
+        <div className="bg-blue-50 dark:bg-blue-900/20 px-4 py-3 border-b border-zinc-200 dark:border-zinc-800">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium text-blue-700 dark:text-blue-400">
+              JTL Wawi
+            </p>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+              {matchField ?? 'Gefunden'}
+            </span>
+          </div>
+        </div>
+        <div className="p-4 space-y-3">
+          <InfoRow label="Name" value={item.name} />
+          <InfoRow label="SKU" value={item.sku} />
+          {item.gtin && <InfoRow label="GTIN" value={item.gtin} />}
+          {item.ownIdentifier && <InfoRow label="Eigene Nr." value={item.ownIdentifier} />}
+          <InfoRow label="VK (UVP)" value={`${item.suggestedRetailPrice.toFixed(2)} EUR`} />
+          <InfoRow label="VK (Netto)" value={`${item.salesPriceNet.toFixed(2)} EUR`} />
+          <InfoRow label="EK (Netto)" value={`${item.purchasePriceNet.toFixed(2)} EUR`} />
+          {item.zalandoPrice && <InfoRow label="Zalando" value={`${item.zalandoPrice} EUR`} />}
+          <InfoRow
+            label="Bestand (verfuegbar)"
+            value={String(item.availableStock)}
+            highlight={item.availableStock <= 0}
+          />
+          {item.countryOfOrigin && <InfoRow label="Herkunft" value={item.countryOfOrigin} />}
+        </div>
+      </div>
+
+      {/* Varianten */}
+      {variantList && (
+        <div className="border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden">
+          <div className="bg-zinc-50 dark:bg-zinc-900 px-4 py-3 border-b border-zinc-200 dark:border-zinc-800">
+            <div className="flex justify-between items-center">
+              <p className="text-sm font-medium">JTL Gesamtbestand</p>
+              <span className={`text-lg font-bold ${
+                stock > 0
+                  ? 'text-green-600 dark:text-green-400'
+                  : 'text-red-600 dark:text-red-400'
+              }`}>
+                {stock}
+              </span>
+            </div>
+            <p className="text-xs text-zinc-500 mt-0.5">
+              {variantList.length} Variante{variantList.length !== 1 ? 'n' : ''}
+            </p>
+          </div>
+          <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+            {variantList.map((v) => {
+              const isScanned =
+                v.gtin === scannedEan ||
+                v.storeNumber === scannedEan ||
+                v.sku === scannedEan;
+              const isExpanded = expandedSku === v.sku;
+              const hasStock = v.availableStock > 0;
+
+              return (
+                <button
+                  key={v.sku}
+                  onClick={() => setExpandedSku(isExpanded ? null : v.sku)}
+                  className={`w-full text-left p-3 transition-colors ${
+                    isScanned
+                      ? 'bg-blue-50/50 dark:bg-blue-900/10'
+                      : isExpanded
+                        ? 'bg-zinc-50/50 dark:bg-zinc-900/50'
+                        : ''
+                  }`}
+                >
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <svg
+                        className={`w-3.5 h-3.5 text-zinc-400 transition-transform flex-shrink-0 ${
+                          isExpanded ? 'rotate-90' : ''
+                        }`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                      <p className="text-sm font-medium truncate">{v.sku}</p>
+                      {isScanned && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 flex-shrink-0">
+                          Gescannt
+                        </span>
+                      )}
+                    </div>
+                    <span className={`text-sm font-bold ml-3 flex-shrink-0 ${
+                      hasStock
+                        ? 'text-green-600 dark:text-green-400'
+                        : 'text-red-500 dark:text-red-400'
+                    }`}>
+                      {v.availableStock}
+                    </span>
+                  </div>
+
+                  {isExpanded && (
+                    <div className="mt-3 ml-5.5 space-y-2 border-t border-zinc-100 dark:border-zinc-800 pt-3">
+                      {v.gtin && (
+                        <div className="flex justify-between text-xs">
+                          <span className="text-zinc-500">GTIN</span>
+                          <span className="font-medium">{v.gtin}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between text-xs">
+                        <span className="text-zinc-500">VK (UVP)</span>
+                        <span className="font-medium">{v.suggestedRetailPrice.toFixed(2)} EUR</span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-zinc-500">EK (Netto)</span>
+                        <span className="font-medium">{v.purchasePriceNet.toFixed(2)} EUR</span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-zinc-500">Gesamt</span>
+                        <span className="font-medium">{v.totalStock}</span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-zinc-500">Verfuegbar</span>
+                        <span className={`font-semibold ${
+                          hasStock
+                            ? 'text-green-600 dark:text-green-400'
+                            : 'text-red-500 dark:text-red-400'
+                        }`}>
+                          {v.availableStock}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
