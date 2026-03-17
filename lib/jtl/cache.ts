@@ -2,10 +2,20 @@
  * JTL Stammdaten Cache
  * Lädt transformed_items_with_stocks.csv von Google Drive,
  * parst sie und cached die Daten für 20 Minuten.
+ *
+ * Die CSV hat pro SKU+Lager eine Zeile. Beim Lookup werden
+ * Bestände pro Lager aggregiert und separat zurückgegeben.
  */
 
 const JTL_CACHE_TTL_MS = 20 * 60 * 1000; // 20 Minuten
 const DRIVE_FILE_ID = '1vzgaUk-ULLlK_mS9GtTk9uhWczquDtEI';
+
+export interface JtlStockLocation {
+  readonly storeNumber: string;
+  readonly locationName: string;
+  readonly available: number;
+  readonly total: number;
+}
 
 export interface JtlItem {
   readonly storeNumber: string;
@@ -25,19 +35,41 @@ export interface JtlItem {
   readonly parentItemId: string;
   readonly countryOfOrigin: string;
   readonly zalandoPrice: string;
+  readonly locationName: string;
+}
+
+/** Artikel mit aggregierten Beständen über alle Lager */
+export interface JtlArticle {
+  readonly sku: string;
+  readonly name: string;
+  readonly description: string;
+  readonly gtin: string;
+  readonly ownIdentifier: string;
+  readonly manufacturerNumber: string;
+  readonly salesPriceNet: number;
+  readonly suggestedRetailPrice: number;
+  readonly purchasePriceNet: number;
+  readonly categories: string;
+  readonly isActive: boolean;
+  readonly parentItemId: string;
+  readonly countryOfOrigin: string;
+  readonly zalandoPrice: string;
+  readonly availableStock: number;
+  readonly totalStock: number;
+  readonly stockLocations: readonly JtlStockLocation[];
 }
 
 export interface JtlLookupResult {
   readonly found: boolean;
   readonly source: 'jtl';
-  readonly item?: JtlItem;
+  readonly article?: JtlArticle;
   readonly matchField?: string;
 }
 
 // ─── In-Memory Cache ──────────────────────────────────────────────────────────
 
 interface CacheEntry {
-  readonly items: readonly JtlItem[];
+  readonly rows: readonly JtlItem[];
   readonly loadedAt: number;
 }
 
@@ -51,10 +83,6 @@ function isCacheValid(): boolean {
 
 // ─── CSV Download & Parse ─────────────────────────────────────────────────────
 
-/**
- * Lädt die CSV von Google Drive via direktem Download-Link.
- * Unterstützt Dateien > 100KB (Bestätigungs-Redirect).
- */
 async function downloadCsv(): Promise<string> {
   const url = `https://drive.google.com/uc?export=download&id=${DRIVE_FILE_ID}`;
 
@@ -82,9 +110,6 @@ async function downloadCsv(): Promise<string> {
   return text;
 }
 
-/**
- * Parst eine CSV-Zeile unter Berücksichtigung von Quotes und Kommas innerhalb von Feldern.
- */
 function parseCsvLine(line: string): string[] {
   const fields: string[] = [];
   let current = '';
@@ -97,7 +122,7 @@ function parseCsvLine(line: string): string[] {
       if (char === '"') {
         if (i + 1 < line.length && line[i + 1] === '"') {
           current += '"';
-          i++; // Skip escaped quote
+          i++;
         } else {
           inQuotes = false;
         }
@@ -121,8 +146,14 @@ function parseCsvLine(line: string): string[] {
 }
 
 /**
- * Parst die CSV und gibt ein Array von JtlItems zurück.
+ * Extrahiert den Lager-Namen aus StorageLocationId.
+ * Format: "69777 (Shoesplease Zwickau)" → "Shoesplease Zwickau"
  */
+function parseLocationName(storageLocationId: string): string {
+  const match = storageLocationId.match(/\(([^)]+)\)/);
+  return match ? match[1] : storageLocationId;
+}
+
 function parseCsv(csvText: string): JtlItem[] {
   const lines = csvText.split('\n');
   if (lines.length < 2) return [];
@@ -170,24 +201,56 @@ function parseCsv(csvText: string): JtlItem[] {
       parentItemId: get(fields, 'ParentItemId'),
       countryOfOrigin: get(fields, 'CountryOfOrigin'),
       zalandoPrice: get(fields, 'zalando_price'),
+      locationName: parseLocationName(get(fields, 'StorageLocationId')),
     });
   }
 
   return items;
 }
 
-// ─── Public API ───────────────────────────────────────────────────────────────
+// ─── Aggregation ──────────────────────────────────────────────────────────────
 
 /**
- * Lädt die JTL-Daten (aus Cache oder frisch von Drive).
- * Dedupliziert parallele Requests über ein shared Promise.
+ * Aggregiert CSV-Zeilen (pro Lager) zu einem Artikel mit Lager-Aufschlüsselung.
  */
-export async function getJtlItems(): Promise<readonly JtlItem[]> {
+function aggregateRows(rows: readonly JtlItem[]): JtlArticle {
+  const first = rows[0];
+
+  const stockLocations: JtlStockLocation[] = rows.map((r) => ({
+    storeNumber: r.storeNumber,
+    locationName: r.locationName,
+    available: r.availableStock,
+    total: r.totalStock,
+  }));
+
+  return {
+    sku: first.sku,
+    name: first.name,
+    description: first.description,
+    gtin: first.gtin,
+    ownIdentifier: first.ownIdentifier,
+    manufacturerNumber: first.manufacturerNumber,
+    salesPriceNet: first.salesPriceNet,
+    suggestedRetailPrice: first.suggestedRetailPrice,
+    purchasePriceNet: first.purchasePriceNet,
+    categories: first.categories,
+    isActive: first.isActive,
+    parentItemId: first.parentItemId,
+    countryOfOrigin: first.countryOfOrigin,
+    zalandoPrice: first.zalandoPrice,
+    availableStock: stockLocations.reduce((sum, l) => sum + l.available, 0),
+    totalStock: stockLocations.reduce((sum, l) => sum + l.total, 0),
+    stockLocations,
+  };
+}
+
+// ─── Public API ───────────────────────────────────────────────────────────────
+
+async function getRows(): Promise<readonly JtlItem[]> {
   if (isCacheValid() && cache) {
-    return cache.items;
+    return cache.rows;
   }
 
-  // Verhindere parallele Downloads
   if (loadPromise) {
     return loadPromise;
   }
@@ -196,17 +259,16 @@ export async function getJtlItems(): Promise<readonly JtlItem[]> {
     try {
       console.log('[JTL Cache] Lade CSV von Google Drive...');
       const csvText = await downloadCsv();
-      const items = parseCsv(csvText);
-      console.log(`[JTL Cache] ${items.length} Artikel geladen und gecached.`);
+      const rows = parseCsv(csvText);
+      console.log(`[JTL Cache] ${rows.length} Zeilen geladen und gecached.`);
 
-      cache = { items, loadedAt: Date.now() };
-      return items;
+      cache = { rows, loadedAt: Date.now() };
+      return rows;
     } catch (error) {
       console.error('[JTL Cache] Fehler beim Laden:', error);
-      // Bei Fehler: alten Cache weiterverwenden falls vorhanden
       if (cache) {
         console.warn('[JTL Cache] Verwende veralteten Cache als Fallback.');
-        return cache.items;
+        return cache.rows;
       }
       throw error;
     } finally {
@@ -218,37 +280,64 @@ export async function getJtlItems(): Promise<readonly JtlItem[]> {
 }
 
 /**
+ * Normalisiert eine EAN/GTIN für den Vergleich:
+ * - Lowercase
+ * - Führende Nullen entfernen (bei reinen Zahlen)
+ */
+function normalizeForSearch(value: string): string {
+  const lower = value.toLowerCase().trim();
+  // Bei reinen Zahlen: führende Nullen entfernen
+  if (/^\d+$/.test(lower)) {
+    return lower.replace(/^0+/, '');
+  }
+  return lower;
+}
+
+/**
  * Sucht einen Artikel anhand von EAN, GTIN, SKU oder eigener Artikelnummer.
- * Sucht in mehreren Feldern gleichzeitig.
+ * Aggregiert Lager-Duplikate automatisch.
  */
 export async function findJtlItem(query: string): Promise<JtlLookupResult> {
-  const items = await getJtlItems();
+  const rows = await getRows();
   const q = query.trim().toLowerCase();
+  const qNormalized = normalizeForSearch(query);
 
   // Exakte Suche in Reihenfolge der Wahrscheinlichkeit
-  const searchFields: { field: keyof JtlItem; label: string }[] = [
-    { field: 'gtin', label: 'GTIN' },
-    { field: 'storeNumber', label: 'StoreNumber' },
-    { field: 'ownIdentifier', label: 'Eigene Artikelnummer' },
-    { field: 'sku', label: 'SKU' },
-    { field: 'manufacturerNumber', label: 'Herstellernummer' },
+  const searchFields: { field: keyof JtlItem; label: string; normalize: boolean }[] = [
+    { field: 'gtin', label: 'GTIN', normalize: true },
+    { field: 'storeNumber', label: 'StoreNumber', normalize: true },
+    { field: 'ownIdentifier', label: 'Eigene Artikelnummer', normalize: false },
+    { field: 'sku', label: 'SKU', normalize: false },
+    { field: 'manufacturerNumber', label: 'Herstellernummer', normalize: true },
   ];
 
-  for (const { field, label } of searchFields) {
-    const match = items.find(
-      (item) => String(item[field]).toLowerCase() === q
-    );
-    if (match) {
-      return { found: true, source: 'jtl', item: match, matchField: label };
+  for (const { field, label, normalize } of searchFields) {
+    const matchingRows = rows.filter((row) => {
+      const value = String(row[field]);
+      if (normalize) {
+        return normalizeForSearch(value) === qNormalized;
+      }
+      return value.toLowerCase() === q;
+    });
+
+    if (matchingRows.length > 0) {
+      const article = aggregateRows(matchingRows);
+      return { found: true, source: 'jtl', article, matchField: label };
     }
   }
 
   // Teilsuche im SKU (z.B. "CD520" findet "18533-CD520-W32/L34")
-  const partialMatch = items.find(
-    (item) => item.sku.toLowerCase().includes(q) && q.length >= 3
-  );
-  if (partialMatch) {
-    return { found: true, source: 'jtl', item: partialMatch, matchField: 'SKU (teilweise)' };
+  if (q.length >= 3) {
+    const matchingRows = rows.filter(
+      (row) => row.sku.toLowerCase().includes(q)
+    );
+    if (matchingRows.length > 0) {
+      // Gruppiere nach SKU und nimm die erste Gruppe
+      const firstSku = matchingRows[0].sku;
+      const skuRows = matchingRows.filter((r) => r.sku === firstSku);
+      const article = aggregateRows(skuRows);
+      return { found: true, source: 'jtl', article, matchField: 'SKU (teilweise)' };
+    }
   }
 
   return { found: false, source: 'jtl' };
@@ -256,12 +345,22 @@ export async function findJtlItem(query: string): Promise<JtlLookupResult> {
 
 /**
  * Findet alle Varianten eines Artikels (gleiche ParentItemId).
+ * Jede Variante wird über alle Lager aggregiert.
  */
-export async function findJtlSiblings(item: JtlItem): Promise<readonly JtlItem[]> {
-  if (!item.parentItemId) return [item];
+export async function findJtlSiblings(article: JtlArticle): Promise<readonly JtlArticle[]> {
+  if (!article.parentItemId) return [article];
 
-  const items = await getJtlItems();
-  return items.filter((i) => i.parentItemId === item.parentItemId);
+  const rows = await getRows();
+  const siblingRows = rows.filter((r) => r.parentItemId === article.parentItemId);
+
+  // Gruppiere nach SKU
+  const skuGroups = new Map<string, JtlItem[]>();
+  for (const row of siblingRows) {
+    const existing = skuGroups.get(row.sku) ?? [];
+    skuGroups.set(row.sku, [...existing, row]);
+  }
+
+  return Array.from(skuGroups.values()).map(aggregateRows);
 }
 
 /**
@@ -269,18 +368,18 @@ export async function findJtlSiblings(item: JtlItem): Promise<readonly JtlItem[]
  */
 export function getCacheStatus(): {
   loaded: boolean;
-  itemCount: number;
+  rowCount: number;
   ageMinutes: number;
   stale: boolean;
 } {
   if (!cache) {
-    return { loaded: false, itemCount: 0, ageMinutes: 0, stale: true };
+    return { loaded: false, rowCount: 0, ageMinutes: 0, stale: true };
   }
 
   const ageMs = Date.now() - cache.loadedAt;
   return {
     loaded: true,
-    itemCount: cache.items.length,
+    rowCount: cache.rows.length,
     ageMinutes: Math.round(ageMs / 60000),
     stale: ageMs >= JTL_CACHE_TTL_MS,
   };

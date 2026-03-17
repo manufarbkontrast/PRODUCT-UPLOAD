@@ -4,6 +4,7 @@ import { findJtlItem, findJtlSiblings, getCacheStatus } from '@/lib/jtl/cache';
 /**
  * POST /api/jtl-lookup
  * Sucht Artikel in der JTL-Stammdaten CSV (cached von Google Drive).
+ * Aggregiert Bestände pro Lager und zeigt Varianten.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -27,7 +28,7 @@ export async function POST(request: NextRequest) {
 
     const result = await findJtlItem(query);
 
-    if (!result.found || !result.item) {
+    if (!result.found || !result.article) {
       return NextResponse.json({
         found: false,
         source: 'jtl',
@@ -36,13 +37,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Alle Varianten (Geschwister) laden
-    const siblings = await findJtlSiblings(result.item);
+    const siblings = await findJtlSiblings(result.article);
 
     return NextResponse.json({
       found: true,
       source: 'jtl',
       matchField: result.matchField,
-      item: result.item,
+      article: result.article,
       variants: siblings,
       totalStock: siblings.reduce((sum, s) => sum + s.availableStock, 0),
       cache: getCacheStatus(),

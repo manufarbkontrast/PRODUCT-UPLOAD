@@ -30,8 +30,14 @@ interface InventoryData {
   readonly variants?: readonly VariantInventory[];
 }
 
-interface JtlItem {
+interface JtlStockLocation {
   readonly storeNumber: string;
+  readonly locationName: string;
+  readonly available: number;
+  readonly total: number;
+}
+
+interface JtlArticle {
   readonly sku: string;
   readonly name: string;
   readonly description: string;
@@ -48,14 +54,15 @@ interface JtlItem {
   readonly parentItemId: string;
   readonly countryOfOrigin: string;
   readonly zalandoPrice: string;
+  readonly stockLocations: readonly JtlStockLocation[];
 }
 
 interface JtlResult {
   readonly found: boolean;
   readonly source: 'jtl';
   readonly matchField?: string;
-  readonly item?: JtlItem;
-  readonly variants?: readonly JtlItem[];
+  readonly article?: JtlArticle;
+  readonly variants?: readonly JtlArticle[];
   readonly totalStock?: number;
 }
 
@@ -186,9 +193,9 @@ export default function AbfragePage() {
       {productInfo && !searching && (
         <div className="space-y-4">
           {/* JTL Ergebnis */}
-          {jtlResult?.found && jtlResult.item && (
+          {jtlResult?.found && jtlResult.article && (
             <JtlResultCard
-              item={jtlResult.item}
+              article={jtlResult.article}
               matchField={jtlResult.matchField}
               variants={jtlResult.variants}
               totalStock={jtlResult.totalStock}
@@ -465,20 +472,20 @@ function LocationSummary({ variants }: { readonly variants: readonly VariantInve
 
 /** JTL Artikel-Ergebnis */
 function JtlResultCard({
-  item,
+  article,
   matchField,
   variants,
   totalStock,
   scannedEan,
 }: {
-  readonly item: JtlItem;
+  readonly article: JtlArticle;
   readonly matchField?: string;
-  readonly variants?: readonly JtlItem[];
+  readonly variants?: readonly JtlArticle[];
   readonly totalStock?: number;
   readonly scannedEan: string | null;
 }) {
   const [expandedSku, setExpandedSku] = useState<string | null>(null);
-  const stock = totalStock ?? item.availableStock;
+  const stock = totalStock ?? article.availableStock;
   const variantList = variants && variants.length > 1 ? variants : null;
 
   return (
@@ -496,20 +503,46 @@ function JtlResultCard({
           </div>
         </div>
         <div className="p-4 space-y-3">
-          <InfoRow label="Name" value={item.name} />
-          <InfoRow label="SKU" value={item.sku} />
-          {item.gtin && <InfoRow label="GTIN" value={item.gtin} />}
-          {item.ownIdentifier && <InfoRow label="Eigene Nr." value={item.ownIdentifier} />}
-          <InfoRow label="VK (UVP)" value={`${item.suggestedRetailPrice.toFixed(2)} EUR`} />
-          <InfoRow label="VK (Netto)" value={`${item.salesPriceNet.toFixed(2)} EUR`} />
-          <InfoRow label="EK (Netto)" value={`${item.purchasePriceNet.toFixed(2)} EUR`} />
-          {item.zalandoPrice && <InfoRow label="Zalando" value={`${item.zalandoPrice} EUR`} />}
+          <InfoRow label="Name" value={article.name} />
+          <InfoRow label="SKU" value={article.sku} />
+          {article.gtin && <InfoRow label="GTIN" value={article.gtin} />}
+          {article.ownIdentifier && <InfoRow label="Eigene Nr." value={article.ownIdentifier} />}
+          <InfoRow label="VK (UVP)" value={`${article.suggestedRetailPrice.toFixed(2)} EUR`} />
+          <InfoRow label="VK (Netto)" value={`${article.salesPriceNet.toFixed(2)} EUR`} />
+          <InfoRow label="EK (Netto)" value={`${article.purchasePriceNet.toFixed(2)} EUR`} />
+          {article.zalandoPrice && <InfoRow label="Zalando" value={`${article.zalandoPrice} EUR`} />}
           <InfoRow
             label="Bestand (verfuegbar)"
-            value={String(item.availableStock)}
-            highlight={item.availableStock <= 0}
+            value={String(article.availableStock)}
+            highlight={article.availableStock <= 0}
           />
-          {item.countryOfOrigin && <InfoRow label="Herkunft" value={item.countryOfOrigin} />}
+          {article.countryOfOrigin && <InfoRow label="Herkunft" value={article.countryOfOrigin} />}
+
+          {/* Lager-Aufschlüsselung */}
+          {article.stockLocations.length > 1 && (
+            <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800">
+              <p className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider mb-2">
+                Lager / Filiale
+              </p>
+              <div className="space-y-1.5">
+                {article.stockLocations.map((loc) => (
+                  <div
+                    key={loc.storeNumber}
+                    className="flex justify-between items-center text-xs pl-2 border-l-2 border-blue-200 dark:border-blue-800"
+                  >
+                    <span className="text-zinc-600 dark:text-zinc-400">{loc.locationName}</span>
+                    <span className={`font-semibold ${
+                      loc.available > 0
+                        ? 'text-green-600 dark:text-green-400'
+                        : 'text-red-500 dark:text-red-400'
+                    }`}>
+                      {loc.available}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -535,7 +568,6 @@ function JtlResultCard({
             {variantList.map((v) => {
               const isScanned =
                 v.gtin === scannedEan ||
-                v.storeNumber === scannedEan ||
                 v.sku === scannedEan;
               const isExpanded = expandedSku === v.sku;
               const hasStock = v.availableStock > 0;
@@ -596,20 +628,32 @@ function JtlResultCard({
                         <span className="text-zinc-500">EK (Netto)</span>
                         <span className="font-medium">{v.purchasePriceNet.toFixed(2)} EUR</span>
                       </div>
-                      <div className="flex justify-between text-xs">
-                        <span className="text-zinc-500">Gesamt</span>
-                        <span className="font-medium">{v.totalStock}</span>
-                      </div>
-                      <div className="flex justify-between text-xs">
-                        <span className="text-zinc-500">Verfuegbar</span>
-                        <span className={`font-semibold ${
-                          hasStock
-                            ? 'text-green-600 dark:text-green-400'
-                            : 'text-red-500 dark:text-red-400'
-                        }`}>
-                          {v.availableStock}
-                        </span>
-                      </div>
+
+                      {/* Lager pro Variante */}
+                      {v.stockLocations.length > 0 && (
+                        <div className="mt-2">
+                          <p className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider mb-1.5">
+                            Lager / Filiale
+                          </p>
+                          <div className="space-y-1.5">
+                            {v.stockLocations.map((loc) => (
+                              <div
+                                key={loc.storeNumber}
+                                className="flex justify-between items-center text-xs pl-2 border-l-2 border-zinc-200 dark:border-zinc-700"
+                              >
+                                <span className="text-zinc-600 dark:text-zinc-400">{loc.locationName}</span>
+                                <span className={`font-semibold ${
+                                  loc.available > 0
+                                    ? 'text-green-600 dark:text-green-400'
+                                    : 'text-red-500 dark:text-red-400'
+                                }`}>
+                                  {loc.available}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </button>
