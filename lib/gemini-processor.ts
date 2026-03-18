@@ -26,12 +26,16 @@ export interface GeminiProcessResult {
  * Process a product image using Gemini Flash model.
  * Downloads the original, sends it to Gemini with the category-specific prompt,
  * and returns the processed image buffer.
+ *
+ * @param promptOverride - Optional custom prompt (e.g. view-specific shoe prompt).
+ *                         If provided, overrides the category-based prompt.
  */
 export async function processImageWithGemini(
   imageUrl: string,
-  category: string
+  category: string,
+  promptOverride?: string
 ): Promise<GeminiProcessResult> {
-  const prompt = getImagePromptForCategory(category);
+  const prompt = promptOverride || getImagePromptForCategory(category);
 
   // 1. Validate and download the original image
   validateImageUrl(imageUrl);

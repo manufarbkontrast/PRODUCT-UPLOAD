@@ -261,6 +261,122 @@ OUTPUT REQUIREMENTS:
 TRANSFORM ONLY: lighting quality, background to pure white, centering, remove ALL shadows, optimize aspect ratio to 1:1.44
 NEVER CHANGE: camera position, viewing angle, product orientation, zoom level`;
 
+// ─── Ansichtsspezifische Schuh-Prompts ─────────────────────────────────────────
+
+const SHOE_BASE = `Professional e-commerce product photography with these specifications:
+
+PRESERVE ORIGINAL COMPOSITION:
+- EXACT same camera angle as original image - do NOT change
+- EXACT same camera distance to product - do NOT zoom in or out
+- Product size in frame MUST match original proportions
+
+LIGHTING SETUP:
+- Soft, diffused studio lighting from top-left at 45-degree angle
+- Creates gentle, natural shadow falling to bottom-right
+- Shadow opacity approximately 15-20%, very soft edges
+- Even, consistent lighting across entire product
+- Color temperature: neutral daylight (5500K)
+
+BACKGROUND & COMPOSITION:
+- Pure white to very light gray background (#F5F5F5 to #FFFFFF)
+- Product centered in frame
+- Generous white space margins: minimum 15-20% on all sides
+- Product occupies approximately 60-65% of image height
+
+PRODUCT POSITIONING:
+- Product sits naturally on invisible surface
+- Realistic contact shadow directly beneath product
+
+TECHNICAL REQUIREMENTS:
+- Ultra-high resolution, sharp focus throughout
+- Clean edges, no background artifacts
+- Professional color accuracy
+- No people, hands, or styling props visible
+
+MAINTAIN ORIGINAL:
+- Camera angle MUST stay identical
+- Camera distance MUST stay identical
+- Product proportions remain accurate
+- No distortion or stretching
+- No zooming in or out`;
+
+const SHOE_VIEW_PROMPTS: Record<string, string> = {
+  side_outer: `${SHOE_BASE}
+
+VIEW-SPECIFIC RULES FOR SIDE VIEW:
+- This is a SINGLE shoe photographed from the side (profile/lateral view)
+- The shoe toe MUST point to the LEFT side of the image
+- The heel MUST point to the RIGHT side of the image
+- If the toe points to the RIGHT, MIRROR/FLIP the entire image horizontally
+- If the toe already points LEFT, keep orientation as-is
+- This horizontal flip rule is the #1 most important rule
+- The shoe should show its full profile from toe to heel
+
+TRANSFORM ONLY: background to white, lighting, centering, add subtle shadow, horizontal flip if toe points right
+NEVER CHANGE: camera angle, camera distance, product proportions, zoom level`,
+
+  back_pair_angled: `${SHOE_BASE}
+
+VIEW-SPECIFIC RULES FOR BACK PAIR ANGLED VIEW:
+- This is a PAIR of shoes (TWO shoes) photographed from behind at a slight angle
+- Both shoes must be fully visible and clearly separated
+- Do NOT flip or mirror this image - keep the original left/right positioning
+- Both shoes should be evenly lit and equally sharp
+- The angle should show the back/heel area of both shoes
+- Maintain the natural spacing between the two shoes
+
+TRANSFORM ONLY: background to white, lighting, centering, add subtle shadow
+NEVER CHANGE: shoe arrangement, orientation, camera angle, camera distance, zoom level`,
+
+  heel_pair: `${SHOE_BASE}
+
+VIEW-SPECIFIC RULES FOR HEEL PAIR VIEW:
+- This is a PAIR of shoes (TWO shoes) photographed STRAIGHT from behind
+- Both heels must be clearly visible and perfectly aligned
+- The view should be symmetric - both shoes at equal distance from center
+- Do NOT flip or mirror this image
+- Both shoes should be evenly lit
+- The heel counter, pull tabs, and back details should be clearly visible
+
+TRANSFORM ONLY: background to white, lighting, centering, add subtle shadow
+NEVER CHANGE: shoe arrangement, symmetry, orientation, camera angle, camera distance`,
+
+  sole: `${SHOE_BASE}
+
+VIEW-SPECIFIC RULES FOR SOLE VIEW:
+- This shows the BOTTOM/OUTSOLE of the shoe
+- The tread pattern and sole material must be clearly visible
+- The toe end of the sole should point UPWARD in the image
+- The heel end should be at the BOTTOM of the image
+- If the orientation is wrong, rotate so toe points up
+- Do NOT flip horizontally
+- Maximize the sole visibility in the frame
+
+TRANSFORM ONLY: background to white, lighting, centering, rotation if needed for toe-up orientation
+NEVER CHANGE: camera distance, product proportions, zoom level`,
+
+  angled_front: `${SHOE_BASE}
+
+VIEW-SPECIFIC RULES FOR ANGLED FRONT VIEW:
+- This is a SINGLE shoe at a 3/4 angle from the front
+- The toe area faces toward the camera at an angle
+- The shoe toe should generally point toward the LEFT side of the image
+- If the toe clearly points to the right, MIRROR/FLIP horizontally
+- The 3/4 angle should show both the front and one side of the shoe
+- Materials, textures and front details should be clearly visible
+
+TRANSFORM ONLY: background to white, lighting, centering, add subtle shadow, horizontal flip if toe points right
+NEVER CHANGE: camera angle, camera distance, product proportions, zoom level`,
+};
+
+/**
+ * Returns a view-specific prompt for shoe images based on the classified view type.
+ * Falls back to the generic SHOES_PROMPT for unknown view types.
+ */
+export function getShoeViewPrompt(viewKey: string): string {
+  return SHOE_VIEW_PROMPTS[viewKey] || SHOES_PROMPT;
+}
+
 // Funktion um den richtigen Prompt basierend auf der Kategorie zu bekommen
 export function getImagePromptForCategory(category: string): string {
   const imageType = categoryImageType[category] || 'clothing';

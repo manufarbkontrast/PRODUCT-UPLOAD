@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
-import { categoryImageType, getImageSpecsForCategory } from '@/config/image-processing';
+import { categoryImageType, getImageSpecsForCategory, getShoeViewPrompt } from '@/config/image-processing';
 import { processImageWithGemini } from '@/lib/gemini-processor';
+import { SHOE_VIEWS } from '@/config/shoe-views';
 import { N8N_HEALTH_CHECK_TIMEOUT_MS } from '@/config/constants';
 import { requireUser } from '@/lib/auth/require-user';
 import { validateAdminToken } from '@/lib/admin-auth';
@@ -110,15 +111,25 @@ export async function POST(
       // Vermeidet 60s Vercel-Timeout bei mehreren Bildern
       const startTime = Date.now();
 
-      const processOne = async (img: { id: string; filename: string; original_path: string }) => {
+      const processOne = async (img: { id: string; filename: string; original_path: string; sort_order?: number }) => {
         const imageUrl = img.original_path.startsWith('http')
           ? img.original_path
           : supabase.storage.from('product-images').getPublicUrl(img.original_path).data.publicUrl;
 
         try {
+          // For shoes: use view-specific prompt based on sort_order (set by classifier)
+          let viewPrompt: string | undefined;
+          if (imageType === 'shoes' && img.sort_order !== undefined) {
+            const view = SHOE_VIEWS.find((v) => v.sortOrder === img.sort_order);
+            if (view) {
+              viewPrompt = getShoeViewPrompt(view.key);
+              console.log(`[Process] Bild ${img.id}: Ansicht "${view.label}" (sort_order=${img.sort_order})`);
+            }
+          }
+
           console.log(`[Process] Verarbeite Bild ${img.id} mit Gemini...`);
 
-          const processed = await processImageWithGemini(imageUrl, product.category);
+          const processed = await processImageWithGemini(imageUrl, product.category, viewPrompt);
 
           const processedFilename = `${img.id}_processed.${processed.format}`;
           const storagePath = `${id}/${processedFilename}`;
