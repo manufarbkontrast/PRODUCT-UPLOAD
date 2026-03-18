@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui';
 import ImageUploader from '@/components/ImageUploader';
+import { ShoeViewBadge, MissingViewsBar, ShoeViewOverview } from '@/components/ShoeViewIndicator';
+import { isShoeCategory } from '@/config/shoe-views';
 import { IMAGE_POLL_INTERVAL_MS } from '@/config/constants';
 
 interface ProductImage {
@@ -56,6 +58,8 @@ export default function ProductImagesPage({
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [classifying, setClassifying] = useState(false);
+  const [missingViewLabels, setMissingViewLabels] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const fetchProduct = useCallback(async () => {
@@ -197,6 +201,27 @@ export default function ProductImagesPage({
     }
   };
 
+  const handleReclassify = async () => {
+    setClassifying(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/products/${id}/classify`, { method: 'POST' });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Klassifizierung fehlgeschlagen');
+      }
+      const data = await res.json();
+      if (data.classified) {
+        setMissingViewLabels(data.missingLabels || []);
+      }
+      await fetchProduct();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Klassifizierung fehlgeschlagen');
+    } finally {
+      setClassifying(false);
+    }
+  };
+
   const handleDeleteImage = async (imageId: string) => {
     if (!confirm('Bild wirklich löschen?')) return;
 
@@ -256,7 +281,8 @@ export default function ProductImagesPage({
     );
   }
 
-  const images = product.images || [];
+  const isShoe = isShoeCategory(product.category);
+  const images = [...(product.images || [])].sort((a, b) => a.sortOrder - b.sortOrder);
   const pendingImages = images.filter((img) => img.status === 'pending');
   const processingImages = images.filter((img) => img.status === 'processing');
   const doneImages = images.filter((img) => img.status === 'done');
@@ -434,7 +460,13 @@ export default function ProductImagesPage({
         <h2 className="text-sm font-medium text-zinc-900 dark:text-white mb-3">
           Bilder hochladen
         </h2>
-        <ImageUploader productId={id} existingImageCount={images.length} onUploadComplete={fetchProduct} />
+        <ImageUploader
+          productId={id}
+          category={product.category}
+          existingImageCount={images.length}
+          onUploadComplete={fetchProduct}
+          onClassifyComplete={(result) => setMissingViewLabels(result.missingLabels)}
+        />
       </div>
 
       {images.length > 0 && (
@@ -486,6 +518,28 @@ export default function ProductImagesPage({
         </Button>
       )}
 
+      {/* Shoe classification overview */}
+      {isShoe && images.length > 0 && (
+        <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-medium text-zinc-900 dark:text-white">
+              Schuh-Ansichten
+            </h2>
+            <button
+              onClick={handleReclassify}
+              disabled={classifying || isBusy}
+              className="text-xs text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 disabled:opacity-50"
+            >
+              {classifying ? 'Klassifiziert...' : 'Neu klassifizieren'}
+            </button>
+          </div>
+          <ShoeViewOverview images={images} />
+          {missingViewLabels.length > 0 && (
+            <MissingViewsBar missingLabels={missingViewLabels} />
+          )}
+        </div>
+      )}
+
       {images.length > 0 && (
         <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-4">
           <h2 className="text-sm font-medium text-zinc-900 dark:text-white mb-3">
@@ -503,8 +557,9 @@ export default function ProductImagesPage({
                   className="w-full h-full object-contain"
                 />
 
-                <div className="absolute top-2 left-2">
+                <div className="absolute top-2 left-2 flex items-center gap-1">
                   {getStatusBadge(image.status)}
+                  <ShoeViewBadge sortOrder={image.sortOrder} isShoe={isShoe} />
                 </div>
 
                 {image.status === 'processing' && (

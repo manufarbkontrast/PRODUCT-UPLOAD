@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback } from 'react';
+import { isShoeCategory } from '@/config/shoe-views';
 
 interface ImageFile {
   id: string;
@@ -11,13 +12,16 @@ interface ImageFile {
 
 interface ImageUploaderProps {
   productId: string;
+  category?: string;
   existingImageCount?: number;
   onUploadComplete?: () => void;
+  onClassifyComplete?: (result: { missingLabels: string[] }) => void;
 }
 
-export default function ImageUploader({ productId, existingImageCount = 0, onUploadComplete }: ImageUploaderProps) {
+export default function ImageUploader({ productId, category, existingImageCount = 0, onUploadComplete, onClassifyComplete }: ImageUploaderProps) {
   const [images, setImages] = useState<ImageFile[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [classifying, setClassifying] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFiles = useCallback((files: FileList | null) => {
@@ -105,6 +109,27 @@ export default function ImageUploader({ productId, existingImageCount = 0, onUpl
 
     setUploading(false);
     onUploadComplete?.();
+
+    // Auto-classify shoe images after upload
+    if (category && isShoeCategory(category)) {
+      setClassifying(true);
+      try {
+        const classifyRes = await fetch(`/api/products/${productId}/classify`, {
+          method: 'POST',
+        });
+        if (classifyRes.ok) {
+          const classifyData = await classifyRes.json();
+          if (classifyData.classified) {
+            onClassifyComplete?.({ missingLabels: classifyData.missingLabels || [] });
+            onUploadComplete?.(); // Refresh UI with new sort order
+          }
+        }
+      } catch (err) {
+        console.error('[ImageUploader] Classification failed:', err);
+      } finally {
+        setClassifying(false);
+      }
+    }
   };
 
   const pendingCount = images.filter(i => i.status === 'pending').length;
@@ -203,10 +228,20 @@ export default function ImageUploader({ productId, existingImageCount = 0, onUpl
             {doneCount > 0 && <span>{doneCount} hochgeladen</span>}
           </div>
 
+          {classifying && (
+            <div className="flex items-center gap-2 text-sm text-indigo-600 dark:text-indigo-400">
+              <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+              Bilder werden klassifiziert...
+            </div>
+          )}
+
           {pendingCount > 0 && (
             <button
               onClick={uploadImages}
-              disabled={uploading}
+              disabled={uploading || classifying}
               className="w-full py-2.5 px-4 bg-zinc-900 text-white rounded-lg text-sm font-medium disabled:opacity-50 dark:bg-white dark:text-zinc-900"
             >
               {uploading ? 'Lädt hoch...' : `${pendingCount} Bild${pendingCount !== 1 ? 'er' : ''} hochladen`}
