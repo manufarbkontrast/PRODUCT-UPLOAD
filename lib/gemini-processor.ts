@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { getImagePromptForCategory } from '@/config/image-processing';
+import sharp from 'sharp';
+import { getImagePromptForCategory, categoryImageType } from '@/config/image-processing';
 import { validateImageUrl } from '@/lib/validation/url';
 import { mimeToExtension } from '@/lib/mime';
 
@@ -109,15 +110,78 @@ export async function processImageWithGemini(
     throw new Error('Gemini returned no image data. The model may not have been able to process this image.');
   }
 
-  // 4. Return Gemini output directly (no Sharp post-processing)
-  const processedBuffer = Buffer.from(processedImageData, 'base64');
+  // 4. Post-process with Sharp for consistent framing
+  const geminiBuffer = Buffer.from(processedImageData, 'base64');
+  console.log(`[Gemini] Raw output: ${(geminiBuffer.length / 1024).toFixed(0)} KB, ${processedMimeType}`);
+
+  const imageType = categoryImageType[category] || 'clothing';
+  const finalBuffer = imageType === 'shoes'
+    ? await normalizeShoeFraming(geminiBuffer)
+    : geminiBuffer;
+
   const format = mimeToExtension(processedMimeType);
 
-  console.log(`[Gemini] Processed image: ${(processedBuffer.length / 1024).toFixed(0)} KB, ${processedMimeType}`);
+  console.log(`[Gemini] Final image: ${(finalBuffer.length / 1024).toFixed(0)} KB, ${processedMimeType}`);
 
   return {
-    imageBuffer: processedBuffer,
+    imageBuffer: finalBuffer,
     mimeType: processedMimeType,
     format,
   };
+}
+
+/**
+ * Post-process shoe images for consistent framing:
+ * 1. Flatten to RGB and trim white background to find product bounding box
+ * 2. Add uniform padding (product fills ~62.5% of height)
+ * 3. Center product on white canvas
+ */
+async function normalizeShoeFraming(imageBuffer: Buffer): Promise<Buffer> {
+  const metadata = await sharp(imageBuffer).metadata();
+  if (!metadata.width || !metadata.height) return imageBuffer;
+
+  // Flatten to RGB (remove alpha) then trim white background
+  const flattened = await sharp(imageBuffer)
+    .flatten({ background: { r: 255, g: 255, b: 255 } })
+    .png()
+    .toBuffer();
+
+  const trimmedResult = await sharp(flattened)
+    .trim({ threshold: 50 })
+    .png()
+    .toBuffer({ resolveWithObject: true });
+
+  const productWidth = trimmedResult.info.width;
+  const productHeight = trimmedResult.info.height;
+
+  console.log(`[Sharp] Product: ${productWidth}x${productHeight} (from ${metadata.width}x${metadata.height})`);
+
+  // Target: product should fill ~62.5% of final image height
+  const targetProductRatio = 0.625;
+  const finalHeight = Math.round(productHeight / targetProductRatio);
+  const finalWidth = Math.max(
+    Math.round(finalHeight * 0.75), // minimum 3:4 aspect ratio
+    Math.round(productWidth / 0.7)  // product fills max 70% width
+  );
+
+  // Center product on white canvas
+  const padTop = Math.round((finalHeight - productHeight) / 2);
+  const padBottom = finalHeight - productHeight - padTop;
+  const padLeft = Math.round((finalWidth - productWidth) / 2);
+  const padRight = finalWidth - productWidth - padLeft;
+
+  console.log(`[Sharp] Final: ${finalWidth}x${finalHeight}, product fills ${((productHeight / finalHeight) * 100).toFixed(1)}% height`);
+
+  const result = await sharp(trimmedResult.data)
+    .extend({
+      top: Math.max(0, padTop),
+      bottom: Math.max(0, padBottom),
+      left: Math.max(0, padLeft),
+      right: Math.max(0, padRight),
+      background: { r: 255, g: 255, b: 255, alpha: 1 },
+    })
+    .png()
+    .toBuffer();
+
+  return result;
 }

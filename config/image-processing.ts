@@ -55,12 +55,14 @@ export const categoryImageType: Record<string, ImageProcessingType> = {
 // Schuh-Profil: Mit leichtem Schatten, Spitze immer nach links
 export const SHOES_PROMPT = `Professional e-commerce product photography with these EXACT specifications:
 
-PRESERVE ORIGINAL COMPOSITION:
-- EXACT same camera angle as original image - do NOT change
-- EXACT same camera distance to product - do NOT zoom in or out
-- Camera position relative to product MUST stay identical
-- Product size in frame MUST match original proportions
-- Front and back views: keep as-is
+CONSISTENT FRAMING - HIGHEST PRIORITY:
+- The product MUST occupy exactly 60-65% of the total image HEIGHT
+- If the product is too small in the original photo, ENLARGE it to fill 60-65% of image height
+- If the product is too large, REDUCE it to fill 60-65% of image height
+- This consistent sizing is critical so all products look identical in the online shop
+- Camera ANGLE must stay the same (do not change the viewing perspective)
+- Product proportions must remain accurate (no stretching or distortion)
+- Front and back views: keep original orientation
 
 SHOE ORIENTATION - CRITICAL:
 - The shoe toe MUST ALWAYS point to the LEFT side of the image
@@ -99,14 +101,14 @@ TECHNICAL REQUIREMENTS:
 - Soft, realistic shadows only
 - Studio-quality finish optimized for white backgrounds
 
-MAINTAIN ORIGINAL:
-- Camera angle MUST stay identical
-- Camera distance MUST stay identical
-- Product proportions remain accurate
-- No distortion or stretching
-- No rotation or perspective changes
-- No zooming in or out
+MAINTAIN:
+- Camera angle (viewing perspective) MUST stay identical
+- Product proportions remain accurate (no stretching)
 - Horizontal flip ONLY allowed to ensure toe points left
+ALLOWED TO CHANGE:
+- Product size in frame (zoom in/out to achieve 60-65% height)
+- Background (replace with pure white)
+- Lighting (improve to studio quality)
 
 OUTPUT STYLE:
 - Clean, minimal aesthetic
@@ -115,8 +117,8 @@ OUTPUT STYLE:
 - Optimized for website product pages
 - No people, hands, or styling props visible
 
-TRANSFORM ONLY: lighting quality, background to pure white/light gray, centering, add subtle shadow, horizontal flip if shoe toe points right
-NEVER CHANGE: camera angle, camera distance, product proportions, zoom level`;
+TRANSFORM: lighting, background to pure white, centering, add subtle shadow, horizontal flip if toe points right, resize product to fill 60-65% of image height
+NEVER CHANGE: camera angle, product proportions`;
 
 // Accessoires-Profil: Für Taschen, Rucksäcke, Gürtel, Mützen etc.
 export const ACCESSORIES_PROMPT = `Professional e-commerce product photography for accessories (bags, backpacks, wallets, belts, hats, beanies) with these EXACT specifications:
@@ -265,10 +267,14 @@ NEVER CHANGE: camera position, viewing angle, product orientation, zoom level`;
 
 const SHOE_BASE = `Professional e-commerce product photography with these specifications:
 
-PRESERVE ORIGINAL COMPOSITION:
-- EXACT same camera angle as original image - do NOT change
-- EXACT same camera distance to product - do NOT zoom in or out
-- Product size in frame MUST match original proportions
+CONSISTENT FRAMING - HIGHEST PRIORITY:
+- The product MUST occupy exactly 60-65% of the total image HEIGHT
+- If the product is too small in the original photo, ENLARGE it to fill 60-65% of image height
+- If the product is too large, REDUCE it to fill 60-65% of image height
+- This consistent sizing is critical so all products look identical in the online shop
+- Every shoe product on the website must have the same visual weight and proportion
+- Camera ANGLE must stay the same (do not change the viewing perspective)
+- Product proportions must remain accurate (no stretching or distortion)
 
 LIGHTING SETUP:
 - Soft, diffused studio lighting from top-left at 45-degree angle
@@ -278,10 +284,10 @@ LIGHTING SETUP:
 - Color temperature: neutral daylight (5500K)
 
 BACKGROUND & COMPOSITION:
-- Pure white to very light gray background (#F5F5F5 to #FFFFFF)
-- Product centered in frame
-- Generous white space margins: minimum 15-20% on all sides
-- Product occupies approximately 60-65% of image height
+- Pure white background (#FFFFFF), completely clean
+- Product perfectly centered horizontally and vertically
+- Equal white space margins on all sides (15-20%)
+- The shoe should be positioned in the vertical center of the image
 
 PRODUCT POSITIONING:
 - Product sits naturally on invisible surface
@@ -293,12 +299,14 @@ TECHNICAL REQUIREMENTS:
 - Professional color accuracy
 - No people, hands, or styling props visible
 
-MAINTAIN ORIGINAL:
-- Camera angle MUST stay identical
-- Camera distance MUST stay identical
-- Product proportions remain accurate
-- No distortion or stretching
-- No zooming in or out`;
+MAINTAIN:
+- Camera angle (viewing perspective) MUST stay identical
+- Product proportions remain accurate (no stretching)
+- Product details and textures preserved
+ALLOWED TO CHANGE:
+- Product size in frame (zoom in/out to achieve 60-65% height)
+- Background (replace with pure white)
+- Lighting (improve to studio quality)`;
 
 const SHOE_VIEW_PROMPTS: Record<string, string> = {
   side_outer: `${SHOE_BASE}
@@ -312,21 +320,23 @@ VIEW-SPECIFIC RULES FOR SIDE VIEW:
 - This horizontal flip rule is the #1 most important rule
 - The shoe should show its full profile from toe to heel
 
-TRANSFORM ONLY: background to white, lighting, centering, add subtle shadow, horizontal flip if toe points right
-NEVER CHANGE: camera angle, camera distance, product proportions, zoom level`,
+TRANSFORM: background to white, lighting, centering, add subtle shadow, horizontal flip if toe points right, resize product to fill 60-65% of image height
+NEVER CHANGE: camera angle, product proportions`,
 
   back_pair_angled: `${SHOE_BASE}
 
 VIEW-SPECIFIC RULES FOR BACK PAIR ANGLED VIEW:
 - This is a PAIR of shoes (TWO shoes) photographed from behind at a slight angle
 - Both shoes must be fully visible and clearly separated
-- Do NOT flip or mirror this image - keep the original left/right positioning
+- The shoe toes MUST point to the LEFT side of the image
+- If the toes point to the RIGHT, MIRROR/FLIP the entire image horizontally
+- If the toes already point LEFT, keep orientation as-is
 - Both shoes should be evenly lit and equally sharp
 - The angle should show the back/heel area of both shoes
 - Maintain the natural spacing between the two shoes
 
-TRANSFORM ONLY: background to white, lighting, centering, add subtle shadow
-NEVER CHANGE: shoe arrangement, orientation, camera angle, camera distance, zoom level`,
+TRANSFORM: background to white, lighting, centering, add subtle shadow, horizontal flip if toes point right, resize product to fill 60-65% of image height
+NEVER CHANGE: shoe arrangement, camera angle, product proportions`,
 
   heel_pair: `${SHOE_BASE}
 
@@ -338,8 +348,8 @@ VIEW-SPECIFIC RULES FOR HEEL PAIR VIEW:
 - Both shoes should be evenly lit
 - The heel counter, pull tabs, and back details should be clearly visible
 
-TRANSFORM ONLY: background to white, lighting, centering, add subtle shadow
-NEVER CHANGE: shoe arrangement, symmetry, orientation, camera angle, camera distance`,
+TRANSFORM: background to white, lighting, centering, add subtle shadow, resize product to fill 60-65% of image height
+NEVER CHANGE: shoe arrangement, symmetry, orientation, camera angle, product proportions`,
 
   sole: `${SHOE_BASE}
 
@@ -352,8 +362,8 @@ VIEW-SPECIFIC RULES FOR SOLE VIEW:
 - Do NOT flip horizontally
 - Maximize the sole visibility in the frame
 
-TRANSFORM ONLY: background to white, lighting, centering, rotation if needed for toe-up orientation
-NEVER CHANGE: camera distance, product proportions, zoom level`,
+TRANSFORM: background to white, lighting, centering, rotation if needed for toe-up orientation, resize product to fill 60-65% of image height
+NEVER CHANGE: camera angle, product proportions`,
 
   angled_front: `${SHOE_BASE}
 
@@ -365,8 +375,8 @@ VIEW-SPECIFIC RULES FOR ANGLED FRONT VIEW:
 - The 3/4 angle should show both the front and one side of the shoe
 - Materials, textures and front details should be clearly visible
 
-TRANSFORM ONLY: background to white, lighting, centering, add subtle shadow, horizontal flip if toe points right
-NEVER CHANGE: camera angle, camera distance, product proportions, zoom level`,
+TRANSFORM: background to white, lighting, centering, add subtle shadow, horizontal flip if toe points right, resize product to fill 60-65% of image height
+NEVER CHANGE: camera angle, product proportions`,
 };
 
 /**

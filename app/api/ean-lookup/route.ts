@@ -1,20 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
-  findProductByBarcode,
-  isShopifyConfigured,
-  type ShopifyLookupResult,
-} from '@/lib/shopify/client';
-import {
-  mapToBrandCode,
-  mapToGender,
   mapToColor,
   type EanLookupResult,
 } from '@/config/ean-lookup-mappings';
+import {
+  findByEan,
+  findVariants,
+  extractSizeFromSku,
+  extractColorFromName,
+  isJtlStocksConfigured,
+  type JtlStockItem,
+} from '@/lib/jtl-stocks';
 
 /**
  * POST /api/ean-lookup
- * Sucht Produktdaten zu einer EAN/GTIN ausschließlich in Shopify.
- * KEINE Internet-Suche, KEIN Gemini - nur Shopify-Daten.
+ * Sucht Produktdaten zu einer EAN/GTIN in den JTL-Bestandsdaten (Google Drive).
  */
 export async function POST(request: NextRequest) {
   try {
@@ -30,144 +30,128 @@ export async function POST(request: NextRequest) {
 
     const cleanedEan = ean.trim();
 
-    // Nur Shopify-Suche - keine andere Datenquelle
-    if (!isShopifyConfigured()) {
+    if (!isJtlStocksConfigured()) {
       return NextResponse.json({
         found: false,
-        error: 'Shopify ist nicht konfiguriert',
+        error: 'JTL-Bestandsdaten nicht konfiguriert (JTL_STOCKS_FOLDER_ID fehlt)',
       });
     }
 
-    const shopifyResult = await findProductByBarcode(cleanedEan);
-
-    if (shopifyResult.found) {
-      return NextResponse.json(buildShopifyResult(shopifyResult, cleanedEan));
+    const jtlItems = await findByEan(cleanedEan);
+    if (jtlItems.length === 0) {
+      return NextResponse.json({
+        found: false,
+        message: 'Produkt nicht in JTL-Bestandsdaten gefunden',
+      });
     }
 
-    // Produkt nicht in Shopify gefunden
-    return NextResponse.json({
-      found: false,
-      message: 'Produkt nicht in Shopify gefunden',
-    });
+    const result = await buildJtlResult(jtlItems, cleanedEan);
+    return NextResponse.json(result);
   } catch (error) {
     console.error('POST /api/ean-lookup error:', error);
     return NextResponse.json({
       found: false,
-      error: 'Fehler bei der Shopify-Suche',
+      error: 'Fehler bei der Artikelsuche',
     });
   }
 }
 
-// ─── Shopify Result Builder ─────────────────────────────────────────────────
+// ─── JTL Result Builder ─────────────────────────────────────────────────────
 
-function buildShopifyResult(shopify: ShopifyLookupResult, ean: string): EanLookupResult {
-  // Brand-Code mappen
-  const brandCode = mapToBrandCode(shopify.brand ?? '');
+async function buildJtlResult(items: JtlStockItem[], ean: string): Promise<EanLookupResult> {
+  // Prefer active item, prefer shoesplease store
+  const sorted = [...items].sort((a, b) => {
+    if (a.isActive !== b.isActive) return a.isActive ? -1 : 1;
+    if (a.storeNumber === 'shoesplease' && b.storeNumber !== 'shoesplease') return -1;
+    if (b.storeNumber === 'shoesplease' && a.storeNumber !== 'shoesplease') return 1;
+    return 0;
+  });
 
-  // Gender aus Tags oder Produkttyp ableiten
-  const genderCode = inferGenderFromShopify(shopify);
+  const item = sorted[0];
 
-  // Farbe mappen
-  const colorCode = mapToColor(shopify.color ?? '');
+  // Extract size from SKU
+  const size = extractSizeFromSku(item.sku);
+
+  // Extract color from name
+  const color = extractColorFromName(item.name);
+  const colorCode = mapToColor(color);
+
+  // Infer category from JTL categories string
+  const category = inferCategoryFromJtl(item.categories);
+
+  // Get all variants (siblings via parent ID) for stock overview
+  let variants: JtlStockItem[] = [];
+  if (item.parentItemId) {
+    variants = await findVariants(item.parentItemId);
+  }
+
+  // Calculate total available stock across all stores for this EAN
+  const totalAvailable = items.reduce((sum, i) => sum + i.availableStock, 0);
+
+  // Price: use suggested retail price (VK), fallback to net price
+  const price = item.suggestedRetailPrice > 0
+    ? item.suggestedRetailPrice.toFixed(2)
+    : item.priceNet > 0
+      ? (item.priceNet * 1.19).toFixed(2) // Net → Brutto (19% MwSt)
+      : undefined;
 
   return {
     found: true,
-    source: 'shopify',
+    source: 'jtl',
 
-    // Basisdaten
-    name: shopify.name ?? undefined,
-    brand: shopify.brand ?? undefined,
-    brandCode: brandCode ?? undefined,
+    name: item.name,
+    sku: item.sku,
+    barcode: ean,
 
-    // Farbe
-    color: shopify.color ?? undefined,
+    color: color || undefined,
     colorCode: colorCode ?? undefined,
 
-    // Gender
-    gender: inferGenderLabel(genderCode),
-    genderCode: genderCode ?? undefined,
+    size: size || undefined,
 
-    // Shopify-spezifische Daten
-    sku: shopify.sku ?? undefined,
-    price: shopify.price ?? undefined,
-    compareAtPrice: shopify.compareAtPrice ?? undefined,
-    description: shopify.description ?? undefined,
-    images: shopify.images ?? undefined,
-    size: shopify.size ?? undefined,
-    tags: shopify.tags ?? undefined,
-    inventoryQuantity: shopify.inventoryQuantity ?? undefined,
-    barcode: ean,
+    price,
+
+    silhouette: category ?? undefined,
+
+    inventoryQuantity: totalAvailable,
+
+    brand: item.storeNumber === 'shoesplease' ? 'Shoesplease' : 'Jeans&Co',
+
+    variants: variants
+      .filter(v => v.isActive)
+      .map(v => ({
+        sku: v.sku,
+        size: extractSizeFromSku(v.sku),
+        stock: v.availableStock,
+        ean: v.ean,
+      }))
+      .sort((a, b) => {
+        const sizeA = parseFloat(a.size) || 0;
+        const sizeB = parseFloat(b.size) || 0;
+        return sizeA - sizeB;
+      }),
 
     confidence: 'high',
   };
 }
 
 /**
- * Leitet das Gender aus Shopify-Daten ab
+ * Extract category from JTL categories string.
+ * e.g. "[{'CategoryId': 232, 'Name': 'Shopify Shoesplease->Schuhe'}]" → "Schuhe"
  */
-function inferGenderFromShopify(shopify: ShopifyLookupResult): string | null {
-  // Aus Tags suchen (priorisiert)
-  if (shopify.tags && shopify.tags.length > 0) {
-    for (const tag of shopify.tags) {
-      const tagLower = tag.toLowerCase();
-      // Exakte Gender-Tags
-      if (tagLower === 'herren' || tagLower === 'men' || tagLower === 'male') {
-        return 'mann';
-      }
-      if (tagLower === 'damen' || tagLower === 'women' || tagLower === 'female') {
-        return 'frau';
-      }
-      if (tagLower === 'unisex') {
-        return 'unisex';
-      }
-      if (tagLower === 'kinder' || tagLower === 'kids' || tagLower === 'children') {
-        return 'kinder';
-      }
-    }
-  }
+function inferCategoryFromJtl(categories: string): string | null {
+  if (!categories) return null;
 
-  // Aus Produkttyp
-  if (shopify.productType) {
-    const mapped = mapToGender(shopify.productType);
-    if (mapped) return mapped;
-  }
+  const nameMatches = categories.match(/Name':\s*'([^']+)'/g);
+  if (!nameMatches) return null;
 
-  // Aus Produktname - aber vorsichtiger
-  if (shopify.name) {
-    const nameLower = shopify.name.toLowerCase();
-
-    // Explizite Gender-Keywords
-    if (nameLower.includes('herren') || nameLower.includes(' men ') || nameLower.includes('männer')) {
-      return 'mann';
-    }
-    if (nameLower.includes('damen') || nameLower.includes(' women ') || nameLower.includes('frauen')) {
-      return 'frau';
-    }
-    if (nameLower.includes('unisex')) {
-      return 'unisex';
-    }
-
-    // "Baby" nur als Kinder, wenn nicht Teil von Modebegriffen
-    const isBabyFashion = nameLower.includes('baby tee') ||
-                          nameLower.includes('baby t-shirt') ||
-                          nameLower.includes('babydoll');
-    if (!isBabyFashion && (nameLower.includes('kinder') || nameLower.includes('kids'))) {
-      return 'kinder';
+  for (const match of nameMatches) {
+    const nameValue = match.match(/Name':\s*'([^']+)'/)?.[1] ?? '';
+    const segments = nameValue.split('->');
+    const lastSegment = segments[segments.length - 1]?.trim();
+    if (lastSegment && lastSegment !== 'Shopify - nur POS') {
+      return lastSegment;
     }
   }
 
   return null;
-}
-
-/**
- * Wandelt Gender-Code in Label um
- */
-function inferGenderLabel(genderCode: string | null): string | undefined {
-  const labels: Record<string, string> = {
-    'mann': 'Herren',
-    'frau': 'Damen',
-    'unisex': 'Unisex',
-    'kinder': 'Kinder',
-  };
-  return genderCode ? labels[genderCode] : undefined;
 }

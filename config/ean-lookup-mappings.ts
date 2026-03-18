@@ -314,9 +314,9 @@ export interface EanLookupResult {
   readonly silhouetteKey?: string;
   readonly material?: string;
   readonly confidence?: 'high' | 'medium' | 'low';
-  readonly source?: 'shopify' | 'gemini' | string;
+  readonly source?: 'shopify' | 'gemini' | 'jtl' | string;
 
-  // Shopify-spezifische Felder
+  // Gemeinsame Felder
   readonly sku?: string;
   readonly price?: string;
   readonly compareAtPrice?: string;
@@ -326,4 +326,12 @@ export interface EanLookupResult {
   readonly tags?: readonly string[];
   readonly inventoryQuantity?: number;
   readonly barcode?: string;
+
+  // JTL-spezifische Felder
+  readonly variants?: readonly {
+    readonly sku: string;
+    readonly size: string;
+    readonly stock: number;
+    readonly ean: string;
+  }[];
 }
