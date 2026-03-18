@@ -3,6 +3,9 @@ import {
   mapToColor,
   type EanLookupResult,
 } from '@/config/ean-lookup-mappings';
+
+// 133MB JTL-Daten beim ersten Request laden — braucht Zeit
+export const maxDuration = 60;
 import {
   findByEan,
   findVariants,

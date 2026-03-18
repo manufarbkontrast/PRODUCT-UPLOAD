@@ -54,6 +54,7 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith('/api/health') ||
     pathname.startsWith('/api/webhooks/') ||
     pathname.startsWith('/api/internal/') ||
+    pathname === '/api/jtl-warmup' ||
     pathname.startsWith('/_next/') ||
     pathname === '/favicon.ico' ||
     STATIC_EXTENSIONS.test(pathname);
