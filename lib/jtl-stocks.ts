@@ -6,7 +6,7 @@
  *
  * Files are cached in memory with a configurable TTL (default: 1 hour).
  */
-import { downloadFile, listFiles } from '@/lib/google/drive';
+import { loadSavedTokens } from '@/lib/google/auth';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -118,10 +118,82 @@ export function extractColorFromName(name: string): string {
   return colorParts.join(' ');
 }
 
+// ─── Drive Access (direct OAuth2 HTTP — bypasses googleapis library) ─────────
+
+/**
+ * Get a fresh OAuth2 access token via refresh_token grant.
+ * Uses direct HTTP to avoid googleapis library issues on Vercel.
+ */
+async function getAccessToken(): Promise<string> {
+  const tokens = loadSavedTokens();
+  if (!tokens?.refresh_token) {
+    throw new Error('No OAuth2 refresh token available (GOOGLE_OAUTH_TOKENS not set)');
+  }
+
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: process.env.GOOGLE_CLIENT_ID || '',
+      client_secret: process.env.GOOGLE_CLIENT_SECRET || '',
+      refresh_token: tokens.refresh_token,
+      grant_type: 'refresh_token',
+    }),
+  });
+
+  const data = await res.json();
+  if (!data.access_token) {
+    throw new Error(`OAuth2 token refresh failed: ${data.error} – ${data.error_description}`);
+  }
+
+  return data.access_token as string;
+}
+
+interface DriveFile {
+  id: string;
+  name: string;
+  size?: string;
+}
+
+async function jtlListFiles(folderId: string): Promise<DriveFile[]> {
+  const token = await getAccessToken();
+  const url = `https://www.googleapis.com/drive/v3/files`
+    + `?q=${encodeURIComponent(`'${folderId}' in parents and trashed = false`)}`
+    + `&fields=${encodeURIComponent('files(id,name,size)')}`
+    + `&supportsAllDrives=true`
+    + `&includeItemsFromAllDrives=true`;
+
+  console.log('[JTL-Stocks] Listing folder:', folderId);
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Drive list failed (${res.status}): ${text}`);
+  }
+
+  const data = await res.json();
+  return (data.files || []) as DriveFile[];
+}
+
+async function jtlDownloadFile(fileId: string): Promise<Buffer> {
+  const token = await getAccessToken();
+  const res = await fetch(
+    `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&supportsAllDrives=true`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  if (!res.ok) {
+    throw new Error(`Drive download failed (${res.status}): ${await res.text()}`);
+  }
+  const arrayBuffer = await res.arrayBuffer();
+  return Buffer.from(arrayBuffer);
+}
+
 // ─── Loading ────────────────────────────────────────────────────────────────
 
 function getStockFolderId(): string {
-  return process.env.JTL_STOCKS_FOLDER_ID || '';
+  return (process.env.JTL_STOCKS_FOLDER_ID || '').trim();
 }
 
 async function loadStockFiles(): Promise<StockCache> {
@@ -133,15 +205,15 @@ async function loadStockFiles(): Promise<StockCache> {
     throw new Error('JTL_STOCKS_FOLDER_ID is not set');
   }
 
-  // List JSON files in the folder
-  const files = await listFiles(folderId);
-  const jsonFiles = files.filter(f => f.name.endsWith('.json'));
+  // List JSON files in the folder (uses Service Account)
+  const files = await jtlListFiles(folderId);
+  const jsonFiles = files.filter(f => f.name?.endsWith('.json'));
 
   if (jsonFiles.length === 0) {
     throw new Error(`No JSON files found in Drive folder ${folderId}`);
   }
 
-  console.log(`[JTL-Stocks] Found ${jsonFiles.length} JSON files: ${jsonFiles.map(f => f.name).join(', ')}`);
+  console.log(`[JTL-Stocks] Found ${jsonFiles.length} JSON files: ${jsonFiles.map(f => f.name ?? 'unnamed').join(', ')}`);
 
   const eanIndex = new Map<string, JtlStockItem[]>();
   const parentIndex = new Map<string, JtlStockItem[]>();
@@ -149,11 +221,11 @@ async function loadStockFiles(): Promise<StockCache> {
   let indexedItems = 0;
 
   for (const file of jsonFiles) {
-    console.log(`[JTL-Stocks] Downloading ${file.name} (${file.size} bytes)...`);
-    const buffer = await downloadFile(file.id);
+    console.log(`[JTL-Stocks] Downloading ${file.name} (${file.size ?? '?'} bytes)...`);
+    const buffer = await jtlDownloadFile(file.id!);
     const raw = buffer.toString('utf-8');
 
-    console.log(`[JTL-Stocks] Parsing ${file.name}...`);
+    console.log(`[JTL-Stocks] Parsing ${file.name ?? 'unnamed'}...`);
     const records = parseJtlJson(raw);
     totalItems += records.length;
 
