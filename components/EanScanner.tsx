@@ -12,14 +12,16 @@ interface EanScannerProps {
 }
 
 export default function EanScanner({ onScan, onSkip, onLookupResult, autoLookup = true }: EanScannerProps) {
-  const [mode, setMode] = useState<'choice' | 'camera' | 'manual'>('choice');
+  const [mode, setMode] = useState<'choice' | 'camera' | 'confirm' | 'manual'>('choice');
   const [manualEan, setManualEan] = useState('');
+  const [detectedEan, setDetectedEan] = useState('');
   const [error, setError] = useState('');
   const [cameraActive, setCameraActive] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [lookingUp, setLookingUp] = useState(false);
   const [lookupStatus, setLookupStatus] = useState<'idle' | 'searching' | 'found' | 'not_found'>('idle');
   const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const eanLockedRef = useRef(false);
@@ -74,7 +76,31 @@ export default function EanScanner({ onScan, onSkip, onLookupResult, autoLookup 
     performLookup(ean);
   }, [onScan, performLookup]);
 
+  const cropToScanRegion = useCallback((video: HTMLVideoElement): HTMLCanvasElement | null => {
+    // Crop to center 80% width, 30% height (the scan frame area)
+    const canvas = canvasRef.current || document.createElement('canvas');
+    const vw = video.videoWidth;
+    const vh = video.videoHeight;
+    if (vw === 0 || vh === 0) return null;
+
+    const cropW = Math.round(vw * 0.8);
+    const cropH = Math.round(vh * 0.3);
+    const cropX = Math.round((vw - cropW) / 2);
+    const cropY = Math.round((vh - cropH) / 2);
+
+    canvas.width = cropW;
+    canvas.height = cropH;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+
+    ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+    return canvas;
+  }, []);
+
   const detectBarcode = useCallback(async (video: HTMLVideoElement): Promise<string | null> => {
+    // Crop to scan region first
+    const cropped = cropToScanRegion(video);
+
     // Use native BarcodeDetector API (Chrome, Edge, Opera, Android)
     if ('BarcodeDetector' in window) {
       try {
@@ -82,7 +108,9 @@ export default function EanScanner({ onScan, onSkip, onLookupResult, autoLookup 
         const detector = new window.BarcodeDetector({
           formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39'],
         });
-        const barcodes = await detector.detect(video);
+        // Detect on cropped region only
+        const source = cropped || video;
+        const barcodes = await detector.detect(source);
         if (barcodes.length > 0) {
           return barcodes[0].rawValue;
         }
@@ -92,13 +120,14 @@ export default function EanScanner({ onScan, onSkip, onLookupResult, autoLookup 
     }
 
     // Fallback: Send frame to server API for processing
-    const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return null;
-
-    ctx.drawImage(video, 0, 0);
+    const canvas = cropped || document.createElement('canvas');
+    if (!cropped) {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return null;
+      ctx.drawImage(video, 0, 0);
+    }
 
     const blob = await new Promise<Blob | null>((resolve) => {
       canvas.toBlob(resolve, 'image/jpeg', 0.8);
@@ -141,7 +170,7 @@ export default function EanScanner({ onScan, onSkip, onLookupResult, autoLookup 
         setCameraActive(true);
         setScanning(true);
 
-        // Auto-scan every 500ms — lock after first detection
+        // Auto-scan every 500ms — show confirmation on detection
         eanLockedRef.current = false;
         scanIntervalRef.current = setInterval(async () => {
           if (eanLockedRef.current) return;
@@ -151,7 +180,8 @@ export default function EanScanner({ onScan, onSkip, onLookupResult, autoLookup 
           if (ean && !eanLockedRef.current) {
             eanLockedRef.current = true;
             stopCamera();
-            handleEanDetected(ean);
+            setDetectedEan(ean);
+            setMode('confirm');
           }
         }, BARCODE_SCAN_INTERVAL_MS);
       }
@@ -277,6 +307,56 @@ export default function EanScanner({ onScan, onSkip, onLookupResult, autoLookup 
     );
   }
 
+  // Confirm mode — show detected EAN and ask for confirmation
+  if (mode === 'confirm') {
+    return (
+      <div className="space-y-4">
+        <div className="text-center py-6">
+          <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center">
+            <svg className="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+            </svg>
+          </div>
+          <p className="text-sm text-zinc-500 mb-2">Erkannter Code:</p>
+          <p className="text-2xl font-bold font-mono tracking-wider text-zinc-900 dark:text-white">
+            {detectedEan}
+          </p>
+        </div>
+
+        <button
+          onClick={() => handleEanDetected(detectedEan)}
+          className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-green-600 text-white rounded-lg text-sm font-medium"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+          Stimmt — weiter
+        </button>
+
+        <button
+          onClick={() => {
+            setDetectedEan('');
+            eanLockedRef.current = false;
+            setMode('camera');
+          }}
+          className="w-full py-3 px-4 border border-zinc-300 dark:border-zinc-700 rounded-lg text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-900"
+        >
+          Falsch — nochmal scannen
+        </button>
+
+        <button
+          onClick={() => {
+            setManualEan(detectedEan);
+            setMode('manual');
+          }}
+          className="w-full py-2 text-sm text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+        >
+          Code korrigieren
+        </button>
+      </div>
+    );
+  }
+
   // Camera mode — continuous auto-scan
   if (mode === 'camera') {
     return (
@@ -290,9 +370,14 @@ export default function EanScanner({ onScan, onSkip, onLookupResult, autoLookup 
             className="w-full h-full object-cover"
           />
 
-          {/* Scan overlay */}
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="w-3/4 h-16 border-2 border-white/50 rounded-lg" />
+          {/* Darkened area outside scan region */}
+          <div className="absolute inset-0 pointer-events-none">
+            <div className="absolute inset-0 bg-black/40" />
+            <div className="absolute left-[10%] right-[10%] top-[35%] bottom-[35%] bg-transparent" style={{boxShadow: '0 0 0 9999px rgba(0,0,0,0.4)'}} />
+            <div className="absolute left-[10%] right-[10%] top-[35%] bottom-[35%] border-2 border-white/80 rounded-lg" />
+            <div className="absolute left-[10%] right-[10%] top-[35%] bottom-[35%] flex items-center justify-center">
+              <div className="w-full h-0.5 bg-red-500/60 animate-pulse" />
+            </div>
           </div>
 
           {/* Scanning indicator */}
@@ -307,6 +392,8 @@ export default function EanScanner({ onScan, onSkip, onLookupResult, autoLookup 
         {error && (
           <p className="text-sm text-red-600 text-center">{error}</p>
         )}
+
+        <canvas ref={canvasRef} className="hidden" />
 
         <p className="text-xs text-zinc-500 text-center">
           Barcode im Rahmen positionieren — wird automatisch erkannt
