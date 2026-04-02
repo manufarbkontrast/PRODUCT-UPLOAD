@@ -37,7 +37,6 @@ export async function POST(request: NextRequest) {
     }
 
     const article = result.article;
-    const kArtikel = parseInt(article.sku ? article.sku : '0', 10);
 
     // Load stock locations from Supabase
     const stockLocations = await loadStockForArticle(article);
@@ -48,19 +47,11 @@ export async function POST(request: NextRequest) {
       stockLocations,
     };
 
-    // Load all variants (siblings) with their stock locations
-    let siblings = await findJtlSiblings(article);
-
-    // Enrich each variant with stock locations from Supabase
-    const enrichedVariants = await Promise.all(
-      siblings.map(async (v) => {
-        const variantStock = await loadStockForArticle(v);
-        return { ...v, stockLocations: variantStock };
-      })
-    );
+    // Load all variants (siblings) directly from Supabase by vater_artikel_id
+    const enrichedVariants = await loadVariantsWithStock(article);
 
     const totalStock = enrichedVariants.length > 0
-      ? enrichedVariants.reduce((sum, s) => sum + s.availableStock, 0)
+      ? enrichedVariants.reduce((sum, s) => sum + (s.availableStock ?? 0), 0)
       : article.availableStock;
 
     return NextResponse.json({
@@ -78,6 +69,83 @@ export async function POST(request: NextRequest) {
       found: false,
       error: error instanceof Error ? error.message : 'Fehler bei der JTL-Suche',
     }, { status: 500 });
+  }
+}
+
+/**
+ * Load all variants with stock locations from Supabase.
+ */
+async function loadVariantsWithStock(article: JtlArticle) {
+  try {
+    const { createClient } = await import('@supabase/supabase-js');
+    const sb = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    );
+
+    // Find k_artikel for this SKU to get vater_artikel_id
+    const { data: artRow } = await sb
+      .from('jtl_articles')
+      .select('k_artikel, vater_artikel_id')
+      .eq('sku', article.sku)
+      .limit(1)
+      .single();
+
+    if (!artRow) return [];
+
+    const vaterId = artRow.vater_artikel_id || artRow.k_artikel;
+
+    // Find all siblings
+    const { data: siblings } = await sb
+      .from('jtl_articles')
+      .select('*')
+      .eq('vater_artikel_id', vaterId)
+      .order('sku');
+
+    if (!siblings || siblings.length === 0) return [];
+
+    // Load stock locations for all siblings
+    const siblingIds = siblings.map(s => s.k_artikel);
+    const { data: allStock } = await sb
+      .from('jtl_stock_locations')
+      .select('*')
+      .in('k_artikel', siblingIds);
+
+    const stockMap = new Map<number, Array<{ locationName: string; available: number }>>();
+    for (const s of allStock || []) {
+      if (s.bestand === 0) continue;
+      const existing = stockMap.get(s.k_artikel) || [];
+      existing.push({ locationName: s.lager_name, available: s.bestand });
+      stockMap.set(s.k_artikel, existing);
+    }
+
+    return siblings.map(s => ({
+      sku: s.sku,
+      name: s.sku,
+      description: '',
+      gtin: s.barcode || '',
+      ownIdentifier: '',
+      manufacturerNumber: '',
+      salesPriceNet: s.vk_netto || 0,
+      suggestedRetailPrice: s.uvp || 0,
+      purchasePriceNet: s.ek_letzter || s.ek_netto || 0,
+      categories: s.warengruppe || '',
+      isActive: s.aktiv,
+      parentItemId: String(vaterId),
+      countryOfOrigin: '',
+      zalandoPrice: '',
+      availableStock: s.verfuegbar || 0,
+      totalStock: s.bestand || 0,
+      stockLocations: (stockMap.get(s.k_artikel) || []).map(l => ({
+        storeNumber: l.locationName,
+        locationName: l.locationName,
+        available: l.available,
+        total: l.available,
+      })),
+    }));
+  } catch (error) {
+    console.error('[jtl-lookup] loadVariantsWithStock error:', error);
+    return [];
   }
 }
 
