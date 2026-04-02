@@ -301,17 +301,53 @@ async function getCache(): Promise<StockCache> {
 
 /**
  * Look up a product by EAN/barcode.
- * Returns the matching items (may be multiple if EAN is shared across stores).
+ * Uses live JTL API if configured, falls back to Google Drive cache.
  */
 export async function findByEan(ean: string): Promise<JtlStockItem[]> {
+  // Priority 1: Supabase (synced from JTL SQL Server)
+  try {
+    const { findByEanSupabase } = await import('@/lib/jtl-supabase');
+    const results = await findByEanSupabase(ean);
+    if (results.length > 0) {
+      console.log(`[JTL-Stocks] Supabase hit for EAN ${ean}: ${results.length} results`);
+      return results;
+    }
+  } catch (error) {
+    console.warn('[JTL-Stocks] Supabase lookup failed:', error);
+  }
+
+  // Priority 2: Live API proxy (if configured)
+  if (isLiveApiEnabled()) {
+    const { findByEanLive } = await import('@/lib/jtl-live');
+    return findByEanLive(ean);
+  }
+
+  // Priority 3: Google Drive cache (legacy fallback)
   const stockCache = await getCache();
   return stockCache.eanIndex.get(ean) ?? [];
 }
 
 /**
  * Find all variants (siblings) of a product by its parent ID.
+ * Uses live JTL API if configured, falls back to Google Drive cache.
  */
 export async function findVariants(parentItemId: string): Promise<JtlStockItem[]> {
+  // Priority 1: Supabase
+  try {
+    const { findVariantsSupabase } = await import('@/lib/jtl-supabase');
+    const results = await findVariantsSupabase(parentItemId);
+    if (results.length > 0) return results;
+  } catch (error) {
+    console.warn('[JTL-Stocks] Supabase variants failed:', error);
+  }
+
+  // Priority 2: Live API proxy
+  if (isLiveApiEnabled()) {
+    const { findVariantsByParentLive } = await import('@/lib/jtl-live');
+    return findVariantsByParentLive(parentItemId);
+  }
+
+  // Priority 3: Google Drive cache
   const stockCache = await getCache();
   return stockCache.parentIndex.get(parentItemId) ?? [];
 }
@@ -325,8 +361,15 @@ export async function refreshCache(): Promise<void> {
 }
 
 /**
- * Check if the JTL stocks data source is available.
+ * Check if any JTL data source is available (live API or Google Drive).
  */
 export function isJtlStocksConfigured(): boolean {
-  return !!getStockFolderId();
+  return isLiveApiEnabled() || !!getStockFolderId();
+}
+
+/**
+ * Check if the live JTL API is configured.
+ */
+function isLiveApiEnabled(): boolean {
+  return !!process.env.JTL_API_URL;
 }

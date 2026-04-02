@@ -295,9 +295,131 @@ function normalizeForSearch(value: string): string {
 
 /**
  * Sucht einen Artikel anhand von EAN, GTIN, SKU oder eigener Artikelnummer.
- * Aggregiert Lager-Duplikate automatisch.
+ * Nutzt Live-API wenn konfiguriert, sonst Google Drive CSV.
  */
 export async function findJtlItem(query: string): Promise<JtlLookupResult> {
+  // Priority 1: Supabase (synced JTL data)
+  try {
+    const result = await findJtlItemSupabase(query);
+    if (result.found) return result;
+  } catch (error) {
+    console.warn('[JTL Cache] Supabase lookup failed:', error);
+  }
+
+  // Priority 2: Live API proxy
+  if (process.env.JTL_API_URL) {
+    return findJtlItemLive(query);
+  }
+
+  // Priority 3: Google Drive CSV
+  return findJtlItemFromCsv(query);
+}
+
+/**
+ * Supabase lookup – queries synced JTL data.
+ */
+async function findJtlItemSupabase(query: string): Promise<JtlLookupResult> {
+  const { findByEanSupabase, findBySkuSupabase } = await import('@/lib/jtl-supabase');
+
+  // Try EAN first
+  let items = await findByEanSupabase(query);
+  let matchField = 'EAN (Supabase)';
+
+  // Then SKU
+  if (items.length === 0) {
+    items = await findBySkuSupabase(query);
+    matchField = 'SKU (Supabase)';
+  }
+
+  if (items.length === 0) {
+    return { found: false, source: 'jtl' };
+  }
+
+  const item = items[0];
+  const article: JtlArticle = {
+    sku: item.sku,
+    name: item.sku,
+    description: '',
+    gtin: item.ean,
+    ownIdentifier: '',
+    manufacturerNumber: '',
+    salesPriceNet: item.priceNet,
+    suggestedRetailPrice: item.suggestedRetailPrice,
+    purchasePriceNet: item.purchasePriceNet,
+    categories: item.categories,
+    isActive: item.isActive,
+    parentItemId: item.parentItemId,
+    countryOfOrigin: '',
+    zalandoPrice: '',
+    availableStock: item.availableStock,
+    totalStock: item.totalStock,
+    stockLocations: [],
+  };
+
+  console.log(`[JTL Cache] Supabase hit: ${item.sku} (${matchField})`);
+  return { found: true, source: 'jtl', article, matchField };
+}
+
+/**
+ * Live API lookup – queries jtl_api_proxy directly.
+ */
+async function findJtlItemLive(query: string): Promise<JtlLookupResult> {
+  const apiUrl = (process.env.JTL_API_URL || '').replace(/\/$/, '');
+  const apiKey = process.env.JTL_API_KEY || 'spz-jtl-live-2026';
+
+  // Try EAN first, then SKU
+  for (const paramKey of ['ean', 'sku', 'q']) {
+    const url = `${apiUrl}/api/v1/product?${paramKey}=${encodeURIComponent(query)}`;
+    const response = await fetch(url, {
+      headers: { 'X-API-Key': apiKey },
+      signal: AbortSignal.timeout(8_000),
+    });
+
+    if (!response.ok) continue;
+    const data = await response.json();
+    if (!data.found || !data.results?.length) continue;
+
+    const r = data.results[0];
+    const stockLocations: JtlStockLocation[] = (r.stock_per_warehouse || []).map(
+      (w: { lager: string; bestand: number }) => ({
+        storeNumber: 'shoesplease',
+        locationName: w.lager,
+        available: w.bestand,
+        total: w.bestand,
+      })
+    );
+
+    const article: JtlArticle = {
+      sku: r.sku || '',
+      name: r.sku || '',
+      description: '',
+      gtin: r.barcode || '',
+      ownIdentifier: '',
+      manufacturerNumber: r.season || '',
+      salesPriceNet: r.vk_netto || 0,
+      suggestedRetailPrice: r.uvp || 0,
+      purchasePriceNet: r.ek_letzter || r.ek_netto || 0,
+      categories: r.warengruppe || '',
+      isActive: r.aktiv === 'Y',
+      parentItemId: r.vater_artikel_id ? String(r.vater_artikel_id) : '',
+      countryOfOrigin: '',
+      zalandoPrice: '',
+      availableStock: r.verfuegbar || 0,
+      totalStock: r.bestand || 0,
+      stockLocations,
+    };
+
+    console.log(`[JTL Cache] Live API hit: ${r.sku} (${paramKey}=${query})`);
+    return { found: true, source: 'jtl', article, matchField: `Live-API (${paramKey})` };
+  }
+
+  return { found: false, source: 'jtl' };
+}
+
+/**
+ * CSV-based lookup (original implementation, used as fallback).
+ */
+async function findJtlItemFromCsv(query: string): Promise<JtlLookupResult> {
   const rows = await getRows();
   const q = query.trim().toLowerCase();
   const qNormalized = normalizeForSearch(query);
@@ -345,15 +467,49 @@ export async function findJtlItem(query: string): Promise<JtlLookupResult> {
 
 /**
  * Findet alle Varianten eines Artikels (gleiche ParentItemId).
- * Jede Variante wird über alle Lager aggregiert.
+ * Nutzt Live-API wenn konfiguriert, sonst CSV.
  */
 export async function findJtlSiblings(article: JtlArticle): Promise<readonly JtlArticle[]> {
   if (!article.parentItemId) return [article];
 
+  if (process.env.JTL_API_URL) {
+    const apiUrl = (process.env.JTL_API_URL || '').replace(/\/$/, '');
+    const apiKey = process.env.JTL_API_KEY || 'spz-jtl-live-2026';
+    const url = `${apiUrl}/api/v1/product?sku=${encodeURIComponent(article.sku)}`;
+    const response = await fetch(url, {
+      headers: { 'X-API-Key': apiKey },
+      signal: AbortSignal.timeout(8_000),
+    });
+    if (response.ok) {
+      const data = await response.json();
+      if (data.found && data.results?.[0]?.variants?.length) {
+        return data.results[0].variants.map((v: Record<string, unknown>) => ({
+          sku: v.sku || '',
+          name: String(v.sku || ''),
+          description: '',
+          gtin: v.barcode || '',
+          ownIdentifier: '',
+          manufacturerNumber: '',
+          salesPriceNet: (v.vk_netto as number) || 0,
+          suggestedRetailPrice: (v.uvp as number) || 0,
+          purchasePriceNet: (v.ek_netto as number) || 0,
+          categories: '',
+          isActive: true,
+          parentItemId: article.parentItemId,
+          countryOfOrigin: '',
+          zalandoPrice: '',
+          availableStock: (v.verfuegbar as number) || 0,
+          totalStock: (v.bestand as number) || 0,
+          stockLocations: [],
+        }));
+      }
+    }
+    return [article];
+  }
+
   const rows = await getRows();
   const siblingRows = rows.filter((r) => r.parentItemId === article.parentItemId);
 
-  // Gruppiere nach SKU
   const skuGroups = new Map<string, JtlItem[]>();
   for (const row of siblingRows) {
     const existing = skuGroups.get(row.sku) ?? [];
