@@ -398,8 +398,8 @@ function LocationSummary({ variants }: { readonly variants: readonly VariantInve
  * "18533-CD520-W32/L34" → "W32/L34"
  */
 function extractSize(sku: string): string {
-  // Suche nach Groessen-Pattern am Ende: -44, -W32/L34, -39, etc.
-  const match = sku.match(/-([\w/]+)$/);
+  // Suche nach Groessen-Pattern am Ende: -44, -40.5, -W32/L34, -S/M, etc.
+  const match = sku.match(/-([\d]+(?:\.[\d]+)?|[A-Z]+(?:\/[A-Z]+)?|ONESIZE|[\w/]+)$/);
   return match ? match[1] : sku;
 }
 
