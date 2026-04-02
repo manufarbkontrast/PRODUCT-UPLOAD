@@ -22,6 +22,7 @@ export default function EanScanner({ onScan, onSkip, onLookupResult, autoLookup 
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const eanLockedRef = useRef(false);
 
   const stopCamera = useCallback(() => {
     if (scanIntervalRef.current) {
@@ -140,12 +141,15 @@ export default function EanScanner({ onScan, onSkip, onLookupResult, autoLookup 
         setCameraActive(true);
         setScanning(true);
 
-        // Auto-scan every 500ms
+        // Auto-scan every 500ms — lock after first detection
+        eanLockedRef.current = false;
         scanIntervalRef.current = setInterval(async () => {
+          if (eanLockedRef.current) return;
           if (!videoRef.current || videoRef.current.readyState < 2) return;
 
           const ean = await detectBarcode(videoRef.current);
-          if (ean) {
+          if (ean && !eanLockedRef.current) {
+            eanLockedRef.current = true;
             stopCamera();
             handleEanDetected(ean);
           }
