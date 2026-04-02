@@ -41,9 +41,13 @@ export async function POST(request: NextRequest) {
     // Load stock locations from Supabase
     const stockLocations = await loadStockForArticle(article);
 
-    // Enrich article with stock locations
+    // Load article name from Supabase
+    const artikelName = await loadArticleName(article.sku);
+
+    // Enrich article with stock locations and name
     const enrichedArticle = {
       ...article,
+      name: artikelName || article.name || article.sku,
       stockLocations,
     };
 
@@ -73,6 +77,28 @@ export async function POST(request: NextRequest) {
 }
 
 /**
+ * Load article name from Supabase.
+ */
+async function loadArticleName(sku: string): Promise<string | null> {
+  try {
+    const { createClient } = await import('@supabase/supabase-js');
+    const sb = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    );
+    const { data } = await sb
+      .from('jtl_articles')
+      .select('artikel_name')
+      .eq('sku', sku)
+      .limit(1)
+      .single();
+    return data?.artikel_name || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Load all variants with stock locations from Supabase.
  */
 async function loadVariantsWithStock(article: JtlArticle) {
@@ -86,7 +112,7 @@ async function loadVariantsWithStock(article: JtlArticle) {
     // Find k_artikel for this SKU to get vater_artikel_id
     const { data: artRow } = await sb
       .from('jtl_articles')
-      .select('k_artikel, vater_artikel_id')
+      .select('k_artikel, vater_artikel_id, artikel_name')
       .eq('sku', article.sku)
       .limit(1)
       .single();
@@ -121,7 +147,7 @@ async function loadVariantsWithStock(article: JtlArticle) {
 
     return siblings.map(s => ({
       sku: s.sku,
-      name: s.sku,
+      name: s.artikel_name || s.sku,
       description: '',
       gtin: s.barcode || '',
       ownIdentifier: '',
