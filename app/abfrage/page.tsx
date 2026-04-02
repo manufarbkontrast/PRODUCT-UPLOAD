@@ -74,7 +74,6 @@ interface ProductInfo {
 export default function AbfragePage() {
   const router = useRouter();
   const [productInfo, setProductInfo] = useState<ProductInfo | null>(null);
-  const [inventoryData, setInventoryData] = useState<InventoryData | null>(null);
   const [jtlResult, setJtlResult] = useState<JtlResult | null>(null);
   const [scannedEan, setScannedEan] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
@@ -84,7 +83,7 @@ export default function AbfragePage() {
   const handleEanScan = (ean: string) => {
     setScannedEan(ean);
     setProductInfo(null);
-    setInventoryData(null);
+
     setJtlResult(null);
     setShowScanner(false);
     setSearching(true);
@@ -97,14 +96,9 @@ export default function AbfragePage() {
 
     const fetchData = async () => {
       try {
-        // Shopify + JTL parallel abfragen
-        const [lookupRes, inventoryRes, jtlRes] = await Promise.all([
+        // JTL Daten abfragen
+        const [lookupRes, jtlRes] = await Promise.all([
           fetch('/api/ean-lookup', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ean: scannedEan }),
-          }),
-          fetch('/api/inventory-lookup', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ean: scannedEan }),
@@ -118,11 +112,6 @@ export default function AbfragePage() {
 
         const lookupData: EanLookupResult = await lookupRes.json();
         setProductInfo({ ean: scannedEan, lookup: lookupData });
-
-        if (inventoryRes.ok) {
-          const invData = await inventoryRes.json();
-          setInventoryData(invData);
-        }
 
         if (jtlRes.ok) {
           const jtlData: JtlResult = await jtlRes.json();
@@ -142,7 +131,7 @@ export default function AbfragePage() {
 
   const handleReset = () => {
     setProductInfo(null);
-    setInventoryData(null);
+
     setJtlResult(null);
     setScannedEan(null);
     setSearching(false);
@@ -203,75 +192,8 @@ export default function AbfragePage() {
             />
           )}
 
-          {/* Shopify Ergebnis */}
-          {productInfo.lookup.found ? (
-            <>
-              <div className="border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden">
-                <div className="bg-green-50 dark:bg-green-900/20 px-4 py-3 border-b border-zinc-200 dark:border-zinc-800">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-medium text-green-700 dark:text-green-400">
-                      Shopify
-                    </p>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                      Gefunden
-                    </span>
-                  </div>
-                </div>
-                <div className="p-4 space-y-3">
-                  <InfoRow label="EAN" value={productInfo.ean} />
-                  {productInfo.lookup.name && (
-                    <InfoRow label="Name" value={productInfo.lookup.name} />
-                  )}
-                  {productInfo.lookup.brand && (
-                    <InfoRow label="Marke" value={productInfo.lookup.brand} />
-                  )}
-                  {productInfo.lookup.colorCode && (
-                    <InfoRow label="Farb-Code" value={productInfo.lookup.colorCode} />
-                  )}
-                  {productInfo.lookup.size && (
-                    <InfoRow label="Groesse" value={productInfo.lookup.size} />
-                  )}
-                  {productInfo.lookup.sku && (
-                    <InfoRow label="SKU" value={productInfo.lookup.sku} />
-                  )}
-                  {productInfo.lookup.price && (
-                    <InfoRow label="Preis" value={`${productInfo.lookup.price} EUR`} />
-                  )}
-                  {productInfo.lookup.inventoryQuantity !== undefined && (
-                    <InfoRow
-                      label="Bestand (diese Variante)"
-                      value={String(productInfo.lookup.inventoryQuantity)}
-                      highlight={productInfo.lookup.inventoryQuantity <= 0}
-                    />
-                  )}
-                </div>
-              </div>
-
-              {inventoryData?.found && inventoryData.variants && (
-                <>
-                  <div className="border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden">
-                    <div className="bg-zinc-50 dark:bg-zinc-900 px-4 py-3 border-b border-zinc-200 dark:border-zinc-800">
-                      <div className="flex justify-between items-center">
-                        <p className="text-sm font-medium">Shopify Gesamtbestand</p>
-                        <span className={`text-lg font-bold ${
-                          (inventoryData.totalInventory ?? 0) > 0
-                            ? 'text-green-600 dark:text-green-400'
-                            : 'text-red-600 dark:text-red-400'
-                        }`}>
-                          {inventoryData.totalInventory ?? 0}
-                        </span>
-                      </div>
-                      <p className="text-xs text-zinc-500 mt-0.5">
-                        {inventoryData.variants.length} Variante{inventoryData.variants.length !== 1 ? 'n' : ''} insgesamt
-                      </p>
-                    </div>
-                    <LocationSummary variants={inventoryData.variants} />
-                  </div>
-                  <VariantList variants={inventoryData.variants} scannedEan={scannedEan} />
-                </>
-              )}
-            </>
-          ) : !jtlResult?.found ? (
+          {/* Nicht gefunden */}
+          {!jtlResult?.found ? (
             <div className="border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden">
               <div className="bg-yellow-50 dark:bg-yellow-900/20 px-4 py-3 border-b border-zinc-200 dark:border-zinc-800">
                 <p className="text-sm font-medium text-yellow-700 dark:text-yellow-400">
@@ -281,7 +203,7 @@ export default function AbfragePage() {
               <div className="p-4">
                 <InfoRow label="EAN" value={productInfo.ean} />
                 <p className="text-sm text-zinc-500 mt-3">
-                  Weder in JTL noch in Shopify gefunden.
+                  Artikel nicht in JTL gefunden.
                 </p>
               </div>
             </div>
