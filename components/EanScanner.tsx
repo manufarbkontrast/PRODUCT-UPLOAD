@@ -11,6 +11,10 @@ interface EanScannerProps {
   readonly autoLookup?: boolean;
 }
 
+type BarcodeDetectorInstance = {
+  detect: (source: HTMLCanvasElement | HTMLVideoElement) => Promise<Array<{ rawValue: string }>>;
+};
+
 export default function EanScanner({ onScan, onSkip, onLookupResult, autoLookup = true }: EanScannerProps) {
   const [mode, setMode] = useState<'choice' | 'camera' | 'confirm' | 'manual'>('choice');
   const [manualEan, setManualEan] = useState('');
@@ -20,11 +24,15 @@ export default function EanScanner({ onScan, onSkip, onLookupResult, autoLookup 
   const [scanning, setScanning] = useState(false);
   const [lookingUp, setLookingUp] = useState(false);
   const [lookupStatus, setLookupStatus] = useState<'idle' | 'searching' | 'found' | 'not_found'>('idle');
+  const [torchAvailable, setTorchAvailable] = useState(false);
+  const [torchOn, setTorchOn] = useState(false);
+
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const eanLockedRef = useRef(false);
+  const detectorRef = useRef<BarcodeDetectorInstance | null>(null);
 
   const stopCamera = useCallback(() => {
     if (scanIntervalRef.current) {
@@ -37,6 +45,8 @@ export default function EanScanner({ onScan, onSkip, onLookupResult, autoLookup 
     }
     setCameraActive(false);
     setScanning(false);
+    setTorchOn(false);
+    setTorchAvailable(false);
   }, []);
 
   const performLookup = useCallback(async (ean: string) => {
@@ -76,8 +86,26 @@ export default function EanScanner({ onScan, onSkip, onLookupResult, autoLookup 
     performLookup(ean);
   }, [onScan, performLookup]);
 
+  // Returns cached BarcodeDetector — native or ZXing polyfill
+  const getDetector = useCallback(async (): Promise<BarcodeDetectorInstance> => {
+    if (detectorRef.current) return detectorRef.current;
+
+    const formats = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39'];
+
+    if ('BarcodeDetector' in window) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      detectorRef.current = new (window as any).BarcodeDetector({ formats });
+    } else {
+      // ZXing-based polyfill — runs fully client-side, no API call needed
+      const { BarcodeDetector: ZXingDetector } = await import('barcode-detector/pure');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      detectorRef.current = new (ZXingDetector as any)({ formats });
+    }
+
+    return detectorRef.current!;
+  }, []);
+
   const cropToScanRegion = useCallback((video: HTMLVideoElement): HTMLCanvasElement | null => {
-    // Crop to center 80% width, 30% height (the scan frame area)
     const canvas = canvasRef.current || document.createElement('canvas');
     const vw = video.videoWidth;
     const vh = video.videoHeight;
@@ -98,58 +126,33 @@ export default function EanScanner({ onScan, onSkip, onLookupResult, autoLookup 
   }, []);
 
   const detectBarcode = useCallback(async (video: HTMLVideoElement): Promise<string | null> => {
-    // Crop to scan region first
     const cropped = cropToScanRegion(video);
 
-    // Use native BarcodeDetector API (Chrome, Edge, Opera, Android)
-    if ('BarcodeDetector' in window) {
-      try {
-        // @ts-expect-error - BarcodeDetector is not yet in all TypeScript types
-        const detector = new window.BarcodeDetector({
-          formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39'],
-        });
-        // Detect on cropped region only
-        const source = cropped || video;
-        const barcodes = await detector.detect(source);
-        if (barcodes.length > 0) {
-          return barcodes[0].rawValue;
-        }
-      } catch {
-        // BarcodeDetector failed, fall through to server
-      }
-    }
-
-    // Fallback: Send frame to server API for processing
-    const canvas = cropped || document.createElement('canvas');
-    if (!cropped) {
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return null;
-      ctx.drawImage(video, 0, 0);
-    }
-
-    const blob = await new Promise<Blob | null>((resolve) => {
-      canvas.toBlob(resolve, 'image/jpeg', 0.8);
-    });
-
-    if (!blob) return null;
-
     try {
-      const formData = new FormData();
-      formData.append('image', blob, 'scan.jpg');
-
-      const res = await fetch('/api/scan-ean', {
-        method: 'POST',
-        body: formData,
-      });
-
-      const data = await res.json();
-      return data.ean || null;
+      const detector = await getDetector();
+      const source = cropped || video;
+      const barcodes = await detector.detect(source);
+      if (barcodes.length > 0) {
+        return barcodes[0].rawValue;
+      }
     } catch {
-      return null;
+      // detection failed
     }
-  }, []);
+
+    return null;
+  }, [cropToScanRegion, getDetector]);
+
+  const toggleTorch = useCallback(async () => {
+    const track = streamRef.current?.getVideoTracks()[0];
+    if (!track) return;
+    const next = !torchOn;
+    try {
+      await track.applyConstraints({ advanced: [{ torch: next } as MediaTrackConstraintSet] });
+      setTorchOn(next);
+    } catch {
+      // torch not supported on this device
+    }
+  }, [torchOn]);
 
   const startCamera = useCallback(async () => {
     setError('');
@@ -157,12 +160,17 @@ export default function EanScanner({ onScan, onSkip, onLookupResult, autoLookup 
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: 'environment',
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
         },
       });
 
       streamRef.current = stream;
+
+      // Check torch availability
+      const track = stream.getVideoTracks()[0];
+      const capabilities = track.getCapabilities() as MediaTrackCapabilities & { torch?: boolean };
+      setTorchAvailable(!!capabilities.torch);
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -170,7 +178,6 @@ export default function EanScanner({ onScan, onSkip, onLookupResult, autoLookup 
         setCameraActive(true);
         setScanning(true);
 
-        // Auto-scan every 500ms — show confirmation on detection
         eanLockedRef.current = false;
         scanIntervalRef.current = setInterval(async () => {
           if (eanLockedRef.current) return;
@@ -179,6 +186,7 @@ export default function EanScanner({ onScan, onSkip, onLookupResult, autoLookup 
           const ean = await detectBarcode(videoRef.current);
           if (ean && !eanLockedRef.current) {
             eanLockedRef.current = true;
+            navigator.vibrate?.(100);
             stopCamera();
             setDetectedEan(ean);
             setMode('confirm');
@@ -189,7 +197,7 @@ export default function EanScanner({ onScan, onSkip, onLookupResult, autoLookup 
       setError('Kamera nicht verfügbar. Bitte manuell eingeben.');
       setMode('manual');
     }
-  }, [detectBarcode, handleEanDetected, stopCamera]);
+  }, [detectBarcode, stopCamera]);
 
   useEffect(() => {
     if (mode === 'camera') {
@@ -203,7 +211,6 @@ export default function EanScanner({ onScan, onSkip, onLookupResult, autoLookup 
 
   const validateEan = (ean: string): boolean => {
     const trimmed = ean.trim();
-    // Mindestens 3 Zeichen — eigene Artikelnummern erlauben
     return trimmed.length >= 3;
   };
 
@@ -307,7 +314,7 @@ export default function EanScanner({ onScan, onSkip, onLookupResult, autoLookup 
     );
   }
 
-  // Confirm mode — show detected EAN and ask for confirmation
+  // Confirm mode
   if (mode === 'confirm') {
     return (
       <div className="space-y-4">
@@ -357,7 +364,7 @@ export default function EanScanner({ onScan, onSkip, onLookupResult, autoLookup 
     );
   }
 
-  // Camera mode — continuous auto-scan
+  // Camera mode
   if (mode === 'camera') {
     return (
       <div className="space-y-3">
@@ -386,6 +393,25 @@ export default function EanScanner({ onScan, onSkip, onLookupResult, autoLookup 
               <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
               <span className="text-xs text-white">Scanne automatisch...</span>
             </div>
+          )}
+
+          {/* Torch button */}
+          {torchAvailable && (
+            <button
+              onClick={toggleTorch}
+              className="absolute top-3 right-3 flex items-center justify-center w-9 h-9 rounded-full bg-black/60 text-white"
+              aria-label={torchOn ? 'Licht ausschalten' : 'Licht einschalten'}
+            >
+              {torchOn ? (
+                <svg className="w-5 h-5 text-yellow-300" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z"/>
+                </svg>
+              ) : (
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z"/>
+                </svg>
+              )}
+            </button>
           )}
         </div>
 
