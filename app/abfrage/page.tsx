@@ -626,15 +626,26 @@ function JtlResultCard({
         </div>
       )}
 
-      {/* Nachbestellung: nur wenn der gescannte Artikel ausverkauft ist */}
-      {article.availableStock === 0 && (
-        <ReorderButton
-          sku={article.sku}
-          ean={article.gtin || scannedEan || ''}
-          articleName={article.name}
-          size={extractSize(article.sku)}
-        />
-      )}
+      {/* Nachbestellung: sobald irgendeine Größe ausverkauft ist */}
+      {(() => {
+        const soldOut = variantList
+          ? variantList.filter((v) => v.availableStock === 0)
+          : article.availableStock === 0
+            ? [article]
+            : [];
+        if (soldOut.length === 0) return null;
+        return (
+          <ReorderButton
+            articleName={article.name}
+            variants={soldOut.map((v) => ({
+              sku: v.sku,
+              ean: v.gtin || '',
+              size: extractSize(v.sku),
+            }))}
+            preselectedSkus={[article.sku]}
+          />
+        );
+      })()}
     </div>
   );
 }
