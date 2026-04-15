@@ -5,6 +5,7 @@ import * as fs from 'fs';
 
 const SCOPES = [
   'https://www.googleapis.com/auth/drive',
+  'https://www.googleapis.com/auth/spreadsheets',
 ];
 
 const SERVICE_ACCOUNT_PATH = path.join(process.cwd(), 'google-service-account.json');

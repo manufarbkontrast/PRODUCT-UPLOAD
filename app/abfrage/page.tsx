@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import EanScanner from '@/components/EanScanner';
+import ReorderButton from '@/components/ReorderButton';
 import type { EanLookupResult } from '@/config/ean-lookup-mappings';
 
 interface InventoryLevel {
@@ -623,6 +624,16 @@ function JtlResultCard({
             ))}
           </div>
         </div>
+      )}
+
+      {/* Nachbestellung: nur wenn der gescannte Artikel ausverkauft ist */}
+      {article.availableStock === 0 && (
+        <ReorderButton
+          sku={article.sku}
+          ean={article.gtin || scannedEan || ''}
+          articleName={article.name}
+          size={extractSize(article.sku)}
+        />
       )}
     </div>
   );
