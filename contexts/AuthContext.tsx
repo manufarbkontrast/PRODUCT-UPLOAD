@@ -90,6 +90,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (supabase) {
       await supabase.auth.signOut();
     }
+    // Auch serverseitig: loescht die Supabase-SSR-Cookies
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch {
+      // Ignorieren — Client-Signout + Redirect reichen im Zweifel
+    }
     setUser(null);
     router.push('/login');
     router.refresh();
