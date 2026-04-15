@@ -34,10 +34,9 @@ export default function ReorderButton({
   const [note, setNote] = useState<string>('');
 
   useEffect(() => {
-    if (!brand) return;
     let cancelled = false;
     setStatus({ kind: 'checking' });
-    fetch(`/api/reorder?brand=${encodeURIComponent(brand)}&sku=${encodeURIComponent(sku)}`)
+    fetch(`/api/reorder?sku=${encodeURIComponent(sku)}`)
       .then((r) => r.json())
       .then((data) => {
         if (cancelled) return;
@@ -61,7 +60,7 @@ export default function ReorderButton({
     return () => {
       cancelled = true;
     };
-  }, [brand, sku]);
+  }, [sku]);
 
   const submit = async () => {
     if (!brand) return;

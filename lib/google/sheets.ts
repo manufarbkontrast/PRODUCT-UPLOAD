@@ -2,14 +2,17 @@ import { google, type sheets_v4 } from 'googleapis';
 import { getOAuth2Client, loadSavedTokens, getDriveClient } from './auth';
 
 /**
- * Google Sheets client for reorder sheets.
- * Prefers OAuth2 (same tokens as Drive). Requires the `spreadsheets` scope —
- * re-authorize via /api/google/auth if scope was added after initial auth.
+ * Google Sheets client for the single global reorder sheet.
+ * Requires the `spreadsheets` scope (re-authorize via /api/google/auth if needed).
  */
+
+const SHEET_TITLE = 'SPZ Nachbestellungen';
+const TAB_NAME = 'Nachbestellungen';
 
 const SHEET_HEADER: readonly string[] = [
   'Timestamp',
   'Filiale',
+  'Marke',
   'EAN',
   'SKU',
   'Artikelname',
@@ -23,6 +26,7 @@ export const REORDER_COLUMNS = SHEET_HEADER.length;
 export interface ReorderRow {
   readonly timestamp: string;
   readonly filiale: string;
+  readonly brand: string;
   readonly ean: string;
   readonly sku: string;
   readonly articleName: string;
@@ -56,43 +60,37 @@ async function getSheetsClient(): Promise<sheets_v4.Sheets> {
   return google.sheets({ version: 'v4', auth: oauth2Client });
 }
 
-function sheetTitleForBrand(brand: string): string {
-  return `Nachbestellungen – ${brand}`;
-}
-
 /**
- * Cache brand → spreadsheetId per server invocation.
- * On Vercel each cold start gets a fresh cache, which is fine.
+ * Cache the single spreadsheet ID per invocation.
+ * Each cold start re-resolves via Drive API (cheap, still single sheet).
  */
-const brandSheetCache = new Map<string, string>();
+let sheetIdCache: string | null = null;
 
-async function findSheetIdInFolder(brand: string): Promise<string | null> {
-  const title = sheetTitleForBrand(brand);
+async function findSheetInFolder(): Promise<string | null> {
   const drive = await getDriveClient();
   const folderId = getFolderId();
   const res = await drive.files.list({
     q: [
       `'${folderId}' in parents`,
-      `name = '${title.replace(/'/g, "\\'")}'`,
+      `name = '${SHEET_TITLE.replace(/'/g, "\\'")}'`,
       "mimeType = 'application/vnd.google-apps.spreadsheet'",
       'trashed = false',
     ].join(' and '),
     fields: 'files(id, name)',
     pageSize: 1,
   });
-  const file = res.data.files?.[0];
-  return file?.id ?? null;
+  return res.data.files?.[0]?.id ?? null;
 }
 
-async function createBrandSheet(brand: string): Promise<string> {
+async function createSheet(): Promise<string> {
   const sheets = await getSheetsClient();
   const drive = await getDriveClient();
   const folderId = getFolderId();
 
   const create = await sheets.spreadsheets.create({
     requestBody: {
-      properties: { title: sheetTitleForBrand(brand) },
-      sheets: [{ properties: { title: 'Nachbestellungen' } }],
+      properties: { title: SHEET_TITLE },
+      sheets: [{ properties: { title: TAB_NAME } }],
     },
   });
   const spreadsheetId = create.data.spreadsheetId;
@@ -100,7 +98,6 @@ async function createBrandSheet(brand: string): Promise<string> {
     throw new Error('Failed to create reorder spreadsheet');
   }
 
-  // Move the new spreadsheet into the configured folder.
   await drive.files.update({
     fileId: spreadsheetId,
     addParents: folderId,
@@ -108,10 +105,9 @@ async function createBrandSheet(brand: string): Promise<string> {
     fields: 'id, parents',
   });
 
-  // Write header row.
   await sheets.spreadsheets.values.update({
     spreadsheetId,
-    range: 'Nachbestellungen!A1',
+    range: `${TAB_NAME}!A1`,
     valueInputOption: 'RAW',
     requestBody: { values: [SHEET_HEADER.slice()] },
   });
@@ -119,18 +115,17 @@ async function createBrandSheet(brand: string): Promise<string> {
   return spreadsheetId;
 }
 
-export async function getOrCreateSheetByBrand(brand: string): Promise<string> {
-  const cached = brandSheetCache.get(brand);
-  if (cached) return cached;
+export async function getOrCreateReorderSheet(): Promise<string> {
+  if (sheetIdCache) return sheetIdCache;
 
-  const existing = await findSheetIdInFolder(brand);
+  const existing = await findSheetInFolder();
   if (existing) {
-    brandSheetCache.set(brand, existing);
+    sheetIdCache = existing;
     return existing;
   }
 
-  const created = await createBrandSheet(brand);
-  brandSheetCache.set(brand, created);
+  const created = await createSheet();
+  sheetIdCache = created;
   return created;
 }
 
@@ -139,32 +134,33 @@ function rowToReorder(row: readonly string[]): ReorderRow {
   return {
     timestamp: cell(0),
     filiale: cell(1),
-    ean: cell(2),
-    sku: cell(3),
-    articleName: cell(4),
-    size: cell(5),
-    quantity: cell(6),
-    note: cell(7),
+    brand: cell(2),
+    ean: cell(3),
+    sku: cell(4),
+    articleName: cell(5),
+    size: cell(6),
+    quantity: cell(7),
+    note: cell(8),
   };
 }
 
 /**
- * List all reorder rows currently in the sheet for the given brand.
- * Returns [] when the sheet is empty (only header or missing).
+ * List all rows currently in the sheet. Returns [] when sheet is empty.
+ * Empty rows (all columns blank) are filtered out so deleting contents
+ * of a row via "clear" in the UI releases the SKU lock.
  */
-export async function listActiveReorders(brand: string): Promise<readonly ActiveReorder[]> {
-  const spreadsheetId = await getOrCreateSheetByBrand(brand);
+export async function listActiveReorders(): Promise<readonly ActiveReorder[]> {
+  const spreadsheetId = await getOrCreateReorderSheet();
   const sheets = await getSheetsClient();
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId,
-    range: 'Nachbestellungen!A2:H',
+    range: `${TAB_NAME}!A2:I`,
     majorDimension: 'ROWS',
   });
   const values = res.data.values ?? [];
   return values
     .map((row, idx) => {
       const reorder = rowToReorder(row as readonly string[]);
-      // Skip empty rows (deleted via "clear contents")
       const isEmpty = !reorder.sku && !reorder.ean;
       if (isEmpty) return null;
       return { rowNumber: idx + 2, row: reorder };
@@ -173,28 +169,25 @@ export async function listActiveReorders(brand: string): Promise<readonly Active
 }
 
 export async function findActiveReorderBySku(
-  brand: string,
   sku: string
 ): Promise<ActiveReorder | null> {
-  const all = await listActiveReorders(brand);
+  const all = await listActiveReorders();
   return all.find((r) => r.row.sku === sku) ?? null;
 }
 
-export async function appendReorder(
-  brand: string,
-  row: ReorderRow
-): Promise<void> {
-  const spreadsheetId = await getOrCreateSheetByBrand(brand);
+export async function appendReorder(row: ReorderRow): Promise<void> {
+  const spreadsheetId = await getOrCreateReorderSheet();
   const sheets = await getSheetsClient();
   await sheets.spreadsheets.values.append({
     spreadsheetId,
-    range: 'Nachbestellungen!A:H',
+    range: `${TAB_NAME}!A:I`,
     valueInputOption: 'RAW',
     insertDataOption: 'INSERT_ROWS',
     requestBody: {
       values: [[
         row.timestamp,
         row.filiale,
+        row.brand,
         row.ean,
         row.sku,
         row.articleName,
@@ -210,20 +203,17 @@ export async function appendReorder(
  * Delete a specific row by 1-based row number.
  * Used to roll back on race-condition conflict.
  */
-export async function deleteReorderRow(
-  brand: string,
-  rowNumber: number
-): Promise<void> {
-  const spreadsheetId = await getOrCreateSheetByBrand(brand);
+export async function deleteReorderRow(rowNumber: number): Promise<void> {
+  const spreadsheetId = await getOrCreateReorderSheet();
   const sheets = await getSheetsClient();
 
   const meta = await sheets.spreadsheets.get({ spreadsheetId });
   const sheet = meta.data.sheets?.find(
-    (s) => s.properties?.title === 'Nachbestellungen'
+    (s) => s.properties?.title === TAB_NAME
   );
   const sheetId = sheet?.properties?.sheetId;
   if (sheetId === undefined || sheetId === null) {
-    throw new Error('Tab "Nachbestellungen" not found');
+    throw new Error(`Tab "${TAB_NAME}" not found`);
   }
 
   await sheets.spreadsheets.batchUpdate({
@@ -234,7 +224,7 @@ export async function deleteReorderRow(
           range: {
             sheetId,
             dimension: 'ROWS',
-            startIndex: rowNumber - 1, // 0-based, exclusive end
+            startIndex: rowNumber - 1,
             endIndex: rowNumber,
           },
         },

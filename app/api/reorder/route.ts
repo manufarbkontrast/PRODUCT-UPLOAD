@@ -23,7 +23,7 @@ function asString(value: unknown): string {
 
 /**
  * POST /api/reorder
- * Hängt eine Nachbestellung an das Marken-Sheet an.
+ * Hängt eine Nachbestellung an das globale Sheet an.
  * 409 wenn für die SKU bereits eine offene Zeile existiert.
  */
 export async function POST(request: NextRequest) {
@@ -54,8 +54,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // Pre-check: is the SKU already locked by another filiale?
-    const existing = await findActiveReorderBySku(brand, sku);
+    const existing = await findActiveReorderBySku(sku);
     if (existing) {
       return NextResponse.json(
         {
@@ -68,9 +67,10 @@ export async function POST(request: NextRequest) {
     }
 
     const timestamp = new Date().toISOString();
-    await appendReorder(brand, {
+    await appendReorder({
       timestamp,
       filiale,
+      brand,
       ean,
       sku,
       articleName,
@@ -79,9 +79,9 @@ export async function POST(request: NextRequest) {
       note,
     });
 
-    // Race-condition guard: re-read and ensure our row is the only one for this SKU.
-    // If another filiale slipped in between our pre-check and append, delete our newer row.
-    const after = await listActiveReorders(brand);
+    // Race-Guard: falls zwei Filialen gleichzeitig gebucht haben,
+    // behält die früheste Zeile, die spätere wird entfernt.
+    const after = await listActiveReorders();
     const matches = after.filter((r) => r.row.sku === sku);
     if (matches.length > 1) {
       const oursLatest = matches.reduce((acc, cur) =>
@@ -90,7 +90,7 @@ export async function POST(request: NextRequest) {
       const winner = matches.find((r) => r !== oursLatest);
       if (oursLatest.row.timestamp === timestamp && oursLatest.row.filiale === filiale) {
         try {
-          await deleteReorderRow(brand, oursLatest.rowNumber);
+          await deleteReorderRow(oursLatest.rowNumber);
         } catch (cleanupErr) {
           console.error('[reorder] cleanup failed', cleanupErr);
         }
@@ -118,7 +118,7 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * GET /api/reorder?brand=…&sku=…
+ * GET /api/reorder?sku=…
  * Status-Check ob SKU bereits nachbestellt wurde.
  */
 export async function GET(request: NextRequest) {
@@ -126,18 +126,17 @@ export async function GET(request: NextRequest) {
   if (auth.error) return auth.error;
 
   const { searchParams } = new URL(request.url);
-  const brand = (searchParams.get('brand') ?? '').trim();
   const sku = (searchParams.get('sku') ?? '').trim();
 
-  if (!brand || !sku) {
+  if (!sku) {
     return NextResponse.json(
-      { error: 'brand und sku sind erforderlich' },
+      { error: 'sku ist erforderlich' },
       { status: 400 }
     );
   }
 
   try {
-    const existing = await findActiveReorderBySku(brand, sku);
+    const existing = await findActiveReorderBySku(sku);
     if (!existing) {
       return NextResponse.json({ locked: false });
     }

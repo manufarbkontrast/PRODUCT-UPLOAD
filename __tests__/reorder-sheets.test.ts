@@ -55,46 +55,49 @@ describe('sheets helpers', () => {
 
   it('lists active reorders, skipping empty rows', async () => {
     driveFilesList.mockResolvedValueOnce({
-      data: { files: [{ id: 'sheet-1', name: 'Nachbestellungen – ACME' }] },
+      data: { files: [{ id: 'sheet-1', name: 'SPZ Nachbestellungen' }] },
     });
     valuesGet.mockResolvedValueOnce({
       data: {
         values: [
-          ['2026-04-14T10:00:00Z', 'SPZ', '4001', 'SKU-1', 'Schuh', '42', '1', ''],
-          ['', '', '', '', '', '', '', ''], // simulated cleared row
-          ['2026-04-14T11:00:00Z', 'SPR', '4002', 'SKU-2', 'Hose', 'L', '2', 'Eilig'],
+          ['2026-04-14T10:00:00Z', 'SPZ', 'ACME', '4001', 'SKU-1', 'Schuh', '42', '1', ''],
+          ['', '', '', '', '', '', '', '', ''],
+          ['2026-04-14T11:00:00Z', 'SPR', 'BRAND', '4002', 'SKU-2', 'Hose', 'L', '2', 'Eilig'],
         ],
       },
     });
 
-    const rows = await listActiveReorders('ACME');
+    const rows = await listActiveReorders();
     expect(rows).toHaveLength(2);
     expect(rows[0].row.sku).toBe('SKU-1');
+    expect(rows[0].row.brand).toBe('ACME');
     expect(rows[0].rowNumber).toBe(2);
     expect(rows[1].row.sku).toBe('SKU-2');
+    expect(rows[1].row.brand).toBe('BRAND');
     expect(rows[1].rowNumber).toBe(4);
   });
 
-  it('finds an active reorder by SKU', async () => {
+  it('finds an active reorder by SKU regardless of brand', async () => {
     driveFilesList.mockResolvedValueOnce({
-      data: { files: [{ id: 'sheet-2', name: 'Nachbestellungen – BRAND' }] },
+      data: { files: [{ id: 'sheet-2', name: 'SPZ Nachbestellungen' }] },
     });
     valuesGet.mockResolvedValueOnce({
       data: {
         values: [
-          ['2026-04-14T10:00:00Z', 'SPZ', '4001', 'SKU-A', 'Art', '40', '1', ''],
+          ['2026-04-14T10:00:00Z', 'SPZ', 'BRAND', '4001', 'SKU-A', 'Art', '40', '1', ''],
         ],
       },
     });
 
-    const hit = await findActiveReorderBySku('BRAND', 'SKU-A');
+    const hit = await findActiveReorderBySku('SKU-A');
     expect(hit?.row.filiale).toBe('SPZ');
+    expect(hit?.row.brand).toBe('BRAND');
 
     driveFilesList.mockResolvedValueOnce({
-      data: { files: [{ id: 'sheet-2', name: 'Nachbestellungen – BRAND' }] },
+      data: { files: [{ id: 'sheet-2', name: 'SPZ Nachbestellungen' }] },
     });
     valuesGet.mockResolvedValueOnce({ data: { values: [] } });
-    const miss = await findActiveReorderBySku('BRAND2', 'missing');
+    const miss = await findActiveReorderBySku('missing');
     expect(miss).toBeNull();
   });
 });

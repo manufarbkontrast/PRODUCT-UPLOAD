@@ -59,13 +59,17 @@ REORDER_SHEETS_FOLDER_ID=<folder_id>
 
 Für jede Marke wird beim ersten Aufruf automatisch ein Sheet `Nachbestellungen – <MARKE>` erzeugt und gecacht.
 
-## Spaltenstruktur (Sheet)
+## Sheet-Struktur
 
-| A         | B       | C   | D   | E            | F     | G     | H     |
-|-----------|---------|-----|-----|--------------|-------|-------|-------|
-| Timestamp | Filiale | EAN | SKU | Artikelname  | Größe | Menge | Notiz |
+Es gibt **ein einziges Sheet** namens `SPZ Nachbestellungen` im konfigurierten Drive-Ordner. Alle Filialen und Marken schreiben in dasselbe Sheet.
 
-Die Sperre greift, solange für dieselbe **SKU** eine Zeile existiert. Zum Freigeben: Zeile in der Google-Sheets-Datei löschen.
+Spalten:
+
+| A         | B       | C     | D   | E   | F            | G     | H     | I     |
+|-----------|---------|-------|-----|-----|--------------|-------|-------|-------|
+| Timestamp | Filiale | Marke | EAN | SKU | Artikelname  | Größe | Menge | Notiz |
+
+Die Sperre greift, solange für dieselbe **SKU** eine Zeile existiert (marken-übergreifend). Zum Freigeben: Zeile im Sheet löschen.
 
 ## API
 
@@ -90,6 +94,6 @@ Antworten:
 - `403` `{ error: 'Keine Filiale zugewiesen' }`
 - `409` `{ error: 'Bereits nachbestellt', filiale: 'SPZ', timestamp: '…' }` — gesperrt durch andere Filiale
 
-### `GET /api/reorder?brand=…&sku=…`
+### `GET /api/reorder?sku=…`
 
 Antwort: `{ locked: boolean, filiale?: string, timestamp?: string }`
