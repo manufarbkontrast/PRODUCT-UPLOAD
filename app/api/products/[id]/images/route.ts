@@ -31,6 +31,21 @@ export async function POST(
     const file = formData.get('file') as File | null;
     const replaceExisting = formData.get('replace') === 'true';
 
+    // Optional: expliziter sort_order (z.B. vom gefuehrten Foto-Flow, der genau
+    // weiss welche der 4 kanonischen Schuh-Ansichten gerade aufgenommen wurde).
+    // Ohne diesen Wert faellt die Route auf das bisherige Verhalten zurueck
+    // (sort_order = aktuelle Bildanzahl, siehe unten).
+    const rawSortOrder = formData.get('sortOrder');
+    let explicitSortOrder: number | null = null;
+    if (typeof rawSortOrder === 'string' && rawSortOrder.trim() !== '') {
+      const parsed = Number(rawSortOrder);
+      if (Number.isInteger(parsed) && parsed >= 0) {
+        explicitSortOrder = parsed;
+      } else {
+        return NextResponse.json({ error: 'Ungueltiger sortOrder-Wert' }, { status: 400 });
+      }
+    }
+
     if (!file) {
       return NextResponse.json({ error: 'Keine Datei hochgeladen' }, { status: 400 });
     }
@@ -117,11 +132,16 @@ export async function POST(
       .from('product-images')
       .getPublicUrl(storagePath);
 
-    // Get current image count for sort order
-    const { count } = await supabase
-      .from('product_images')
-      .select('id', { count: 'exact', head: true })
-      .eq('product_id', id);
+    // sort_order: entweder explizit vorgegeben (gefuehrter Foto-Flow) oder wie
+    // bisher die aktuelle Bildanzahl (klassischer Datei-Upload-Fallback).
+    let sortOrder = explicitSortOrder;
+    if (sortOrder === null) {
+      const { count } = await supabase
+        .from('product_images')
+        .select('id', { count: 'exact', head: true })
+        .eq('product_id', id);
+      sortOrder = count || 0;
+    }
 
     // Save to database
     const { data: image, error: dbError } = await supabase
@@ -130,7 +150,7 @@ export async function POST(
         product_id: id,
         original_path: storagePath,
         filename: file.name,
-        sort_order: count || 0,
+        sort_order: sortOrder,
         status: 'pending',
       })
       .select()

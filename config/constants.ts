@@ -32,6 +32,17 @@ export const SCAN_SUCCESS_FLASH_MS = 650;
 export const SCAN_BEEP_FREQUENCY_HZ = 880;
 export const SCAN_BEEP_DURATION_S = 0.12;
 
+/**
+ * Seitenverhaeltnis des Video-Containers in GuidedPhotoCapture.tsx (Tailwind
+ * `aspect-[4/3]`) — bewusst getrennt von SCAN_CONTAINER_ASPECT (EanScanner),
+ * obwohl der Wert zufaellig identisch ist, damit beide Komponenten unabhaengig
+ * voneinander angepasst werden koennen.
+ */
+export const CAPTURE_CONTAINER_ASPECT = 4 / 3;
+
+/** JPEG-Qualitaet (0-1) beim Export des aufgenommenen Fotos aus dem Canvas. */
+export const CAPTURE_JPEG_QUALITY = 0.9;
+
 /** Interval (ms) between product status polling requests */
 export const PRODUCT_POLL_INTERVAL_MS = 5000;
 

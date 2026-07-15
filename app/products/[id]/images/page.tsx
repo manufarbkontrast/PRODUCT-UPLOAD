@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui';
 import ImageUploader from '@/components/ImageUploader';
+import GuidedPhotoCapture from '@/components/GuidedPhotoCapture';
 import { ShoeViewBadge, MissingViewsBar, ShoeViewOverview } from '@/components/ShoeViewIndicator';
 import { isShoeCategory } from '@/config/shoe-views';
 import { IMAGE_POLL_INTERVAL_MS } from '@/config/constants';
@@ -61,6 +62,7 @@ export default function ProductImagesPage({
   const [classifying, setClassifying] = useState(false);
   const [missingViewLabels, setMissingViewLabels] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [guidedCaptureOpen, setGuidedCaptureOpen] = useState(false);
 
   const fetchProduct = useCallback(async () => {
     try {
@@ -456,10 +458,40 @@ export default function ProductImagesPage({
         </div>
       )}
 
+      {isShoe && guidedCaptureOpen && (
+        <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-4">
+          <h2 className="text-sm font-medium text-zinc-900 dark:text-white mb-3">
+            Geführte Aufnahme
+          </h2>
+          <GuidedPhotoCapture
+            productId={id}
+            existingSortOrders={images.map((img) => img.sortOrder)}
+            onUploadComplete={fetchProduct}
+            onAllCaptured={() => setGuidedCaptureOpen(false)}
+            onCancel={() => setGuidedCaptureOpen(false)}
+          />
+        </div>
+      )}
+
       <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-4">
-        <h2 className="text-sm font-medium text-zinc-900 dark:text-white mb-3">
-          Bilder hochladen
-        </h2>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-medium text-zinc-900 dark:text-white">
+            Bilder hochladen
+          </h2>
+          {isShoe && !guidedCaptureOpen && (
+            <button
+              onClick={() => setGuidedCaptureOpen(true)}
+              disabled={isBusy}
+              className="min-h-11 flex items-center gap-1.5 px-3 text-xs font-medium text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 disabled:opacity-50"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              Geführte Aufnahme starten
+            </button>
+          )}
+        </div>
         <ImageUploader
           productId={id}
           category={product.category}
