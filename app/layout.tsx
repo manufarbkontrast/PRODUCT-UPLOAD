@@ -1,13 +1,7 @@
 import type { Metadata, Viewport } from "next";
-import { Geist } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
 import AppShell from "@/components/AppShell";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
 
 export const metadata: Metadata = {
   title: "SPZ Produkt-Upload",
@@ -27,8 +21,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="de">
-      <body className={`${geistSans.variable} font-sans antialiased bg-white dark:bg-zinc-950`}>
+    <html lang="de" className="dark h-full antialiased">
+      <body className="min-h-full bg-background text-foreground">
         <AuthProvider>
           <AppShell>{children}</AppShell>
         </AuthProvider>
