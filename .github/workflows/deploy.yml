@@ -53,4 +53,4 @@ jobs:
       - name: Container neu bauen und starten
         run: |
           ssh "root@${{ secrets.HETZNER_HOST }}" \
-            "cd /opt/erfassung/deploy && docker compose build --quiet && docker compose up -d && docker image prune -f >/dev/null"
+            "cd /opt/erfassung/deploy && docker compose build && docker compose up -d && docker image prune -f >/dev/null"
