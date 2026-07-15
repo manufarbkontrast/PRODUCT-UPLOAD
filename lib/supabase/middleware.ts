@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
+import { withBasePath } from '@/lib/base-path';
 
 /**
  * Refreshes the Supabase Auth session via middleware.
@@ -67,14 +68,18 @@ export async function updateSession(request: NextRequest) {
       );
     }
     const url = request.nextUrl.clone();
-    url.pathname = '/login';
+    // basePath (/erfassung) muss explizit gesetzt werden: Next entfernt ihn
+    // zwar aus request.nextUrl.pathname (Lese-Seite), fügt ihn bei einem
+    // NextResponse.redirect aber NICHT wieder hinzu — sonst landet der Nutzer
+    // auf der Cockpit-Login unter "/login" statt "/erfassung/login".
+    url.pathname = withBasePath('/login');
     return NextResponse.redirect(url);
   }
 
   // Redirect logged-in users away from /login
   if (user && pathname === '/login') {
     const url = request.nextUrl.clone();
-    url.pathname = '/';
+    url.pathname = withBasePath('/');
     return NextResponse.redirect(url);
   }
 
