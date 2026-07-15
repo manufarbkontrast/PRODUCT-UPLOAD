@@ -4,27 +4,16 @@
 # Diese App läuft NICHT hinter einem eigenen Caddy-Container (siehe
 # deploy/docker-compose.yml). Stattdessen muss der bestehende Caddy von
 # brain-cockpit (der bereits Port 80/443 auf dem gemeinsamen Hetzner-Host
-# 167.233.218.238 bedient) auch die Requests unter "/erfassung/*" an den
-# "erfassung"-Container weiterleiten. Dafür:
+# 167.233.218.238 bedient) auch die Requests unter "/erfassung" an den
+# "erfassung"-Container weiterleiten. So ist es auf dem Server eingerichtet
+# (Stand 2026-07-15, live):
 #
-#   1. Den Block "handle /erfassung/*" unten in JEDEN Host-Block der
-#      bestehenden brain-cockpit/deploy/Caddyfile einfügen (also sowohl in
-#      den sslip.io-Block als auch den reinen IP-Block — siehe dort).
-#   2. Sicherstellen, dass der Cockpit-Caddy-Container im selben Docker-
-#      Netzwerk wie der "erfassung"-Container hängt (externes Netzwerk
-#      "shared-edge" — siehe Kommentar in deploy/docker-compose.yml).
-#   3. `docker compose restart caddy` (oder `up -d`) im brain-cockpit-Stack
-#      ausführen, NICHT hier in diesem Repo.
+#   1. In JEDEN Host-Block der brain-cockpit/deploy/Caddyfile den benannten
+#      Matcher + handle-Block einfügen (sslip.io-Block UND reiner IP-Block).
+#   2. `docker restart deploy-caddy-1` im brain-cockpit-Stack ausführen
+#      (NICHT `caddy reload` — siehe STALE-MOUNT-Hinweis unten).
 #
-# Beispiel — Ausschnitt aus brain-cockpit/deploy/Caddyfile NACH der Ergänzung:
-#
-#   167-233-218-238.sslip.io {
-#   	handle /erfassung/* {
-#   		reverse_proxy erfassung:3000
-#   	}
-#   	reverse_proxy app:3000
-#   	encode gzip
-#   }
+# Beispiel — ein Host-Block aus brain-cockpit/deploy/Caddyfile NACH der Ergänzung:
 #
 #   167.233.218.238 {
 #   	tls {
@@ -32,22 +21,43 @@
 #   			profile shortlived
 #   		}
 #   	}
-#   	handle /erfassung/* {
+#   	encode gzip
+#   	@erf path /erfassung /erfassung/*
+#   	handle @erf {
 #   		reverse_proxy erfassung:3000
 #   	}
-#   	reverse_proxy app:3000
-#   	encode gzip
+#   	handle {
+#   		reverse_proxy app:3000
+#   	}
 #   }
 #
-# WICHTIG: "handle" MUSS vor dem allgemeinen "reverse_proxy app:3000" stehen
-# (Caddy matched Handler in Reihenfolge) — und NICHT "handle_path" verwenden!
-# "handle_path" würde "/erfassung" vom Pfad abschneiden, bevor er an den
-# Container weitergeleitet wird. Next.js mit basePath: "/erfassung"
-# (next.config.ts) erwartet aber genau umgekehrt: der volle Pfad INKLUSIVE
-# "/erfassung"-Prefix muss beim Next-Server ankommen, da Next intern seine
-# Routen bereits unter "/erfassung/*" registriert. Mit "handle_path" bekäme
-# Next z.B. nur "/api/products" statt "/erfassung/api/products" und würde
-# 404 liefern.
-handle /erfassung/* {
+# WICHTIG 1 — Matcher deckt "/erfassung" EXAKT UND "/erfassung/*" ab:
+# `handle /erfassung/*` allein matcht das nackte "/erfassung" (ohne Slash)
+# NICHT — dann fällt der Einstiegs-Link zum Cockpit durch. Darum der Matcher
+# `@erf path /erfassung /erfassung/*` (beide Formen).
+#
+# WICHTIG 2 — "handle", NICHT "handle_path": handle_path würde den
+# "/erfassung"-Prefix abschneiden. Next.js mit basePath "/erfassung"
+# (next.config.ts) erwartet aber den VOLLEN Pfad inkl. Prefix, sonst 404.
+# Der Fallback-`handle {}` (ohne Matcher) muss NACH dem @erf-handle stehen.
+#
+# WICHTIG 3 — STALE SINGLE-FILE-BIND-MOUNT: Die Caddyfile ist als EINZELNE
+# Datei in den Container gemountet. Nach dem Überschreiben der Host-Datei
+# sieht der laufende Container u. U. weiter den alten Inhalt, und `caddy
+# reload` lädt dann die ALTE Config (Route fehlt still). Sicherer Weg:
+# `docker restart deploy-caddy-1` — der Container liest die Datei beim Start
+# neu ein. Vorher mit einem Wegwerf-Container validieren, damit der Neustart
+# nicht mit kaputter Config den Cockpit lahmlegt:
+#   docker run --rm -v /opt/brain-cockpit/deploy/Caddyfile:/tmp/C:ro \
+#     caddy:2-alpine caddy validate --config /tmp/C --adapter caddyfile
+#
+# Hinweis: erfassung- und cockpit-Container teilen sich das Netzwerk
+# "deploy_default" (beide Compose-Projekte liegen im Ordner "deploy" → gleicher
+# Projektname). Das separat angelegte "shared-edge"-Netz ist dadurch redundant.
+@erf path /erfassung /erfassung/*
+handle @erf {
 	reverse_proxy erfassung:3000
+}
+handle {
+	reverse_proxy app:3000
 }
