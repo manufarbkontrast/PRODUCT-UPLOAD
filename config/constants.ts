@@ -6,6 +6,22 @@
 /** Interval (ms) between barcode detection attempts in camera mode */
 export const BARCODE_SCAN_INTERVAL_MS = 500;
 
+/**
+ * Scan-Zielbereich (Anteil der Videobreite/-hoehe), einhaendig gut zu treffen.
+ * WICHTIG: Wird sowohl vom visuellen Overlay als auch vom Crop der Scan-Logik
+ * genutzt — beide MUESSEN diese Werte teilen, sonst laufen Anzeige und
+ * tatsaechlich gescannter Bereich auseinander.
+ */
+export const SCAN_REGION_WIDTH_PCT = 0.86;
+export const SCAN_REGION_HEIGHT_PCT = 0.42;
+
+/** Dauer (ms) des gruenen Erfolgs-Overlays nach erkanntem Barcode */
+export const SCAN_SUCCESS_FLASH_MS = 650;
+
+/** WebAudio-Piepton bei erkanntem Barcode (Frequenz in Hz, Dauer in Sekunden) */
+export const SCAN_BEEP_FREQUENCY_HZ = 880;
+export const SCAN_BEEP_DURATION_S = 0.12;
+
 /** Interval (ms) between product status polling requests */
 export const PRODUCT_POLL_INTERVAL_MS = 5000;
 

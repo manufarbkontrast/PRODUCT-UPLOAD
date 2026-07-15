@@ -3,7 +3,16 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import type { EanLookupResult } from '@/config/ean-lookup-mappings';
 import type { JtlArticle } from '@/lib/jtl/cache';
-import { BARCODE_SCAN_INTERVAL_MS } from '@/config/constants';
+import {
+  BARCODE_SCAN_INTERVAL_MS,
+  SCAN_BEEP_DURATION_S,
+  SCAN_BEEP_FREQUENCY_HZ,
+  SCAN_REGION_HEIGHT_PCT,
+  SCAN_REGION_WIDTH_PCT,
+  SCAN_SUCCESS_FLASH_MS,
+} from '@/config/constants';
+import CameraPermissionNotice, { type CameraErrorType } from '@/components/CameraPermissionNotice';
+import EanScannerOverlay from '@/components/EanScannerOverlay';
 
 interface JtlLookupResponse {
   readonly found: boolean;
@@ -11,6 +20,8 @@ interface JtlLookupResponse {
   readonly variants?: readonly JtlArticle[];
   readonly totalStock?: number;
 }
+
+const SOUND_PREFERENCE_KEY = 'ean-scanner-sound-enabled';
 
 /** Extrahiert die Groesse aus einer JTL-SKU (letztes Segment nach dem letzten "-"). */
 function extractSizeFromSku(sku: string): string {
@@ -48,6 +59,18 @@ function mapJtlResultToLookup(data: JtlLookupResponse): EanLookupResult {
   };
 }
 
+/** Ermittelt den Fehlertyp aus einem getUserMedia-Fehler fuer passgenaue Hilfetexte. */
+function classifyCameraError(err: unknown): CameraErrorType {
+  const name = err instanceof DOMException ? err.name : '';
+  if (name === 'NotAllowedError' || name === 'PermissionDeniedError' || name === 'SecurityError') {
+    return 'denied';
+  }
+  if (name === 'NotFoundError' || name === 'DevicesNotFoundError' || name === 'OverconstrainedError') {
+    return 'unavailable';
+  }
+  return 'other';
+}
+
 interface EanScannerProps {
   readonly onScan: (ean: string) => void;
   readonly onSkip?: () => void;
@@ -60,23 +83,74 @@ type BarcodeDetectorInstance = {
 };
 
 export default function EanScanner({ onScan, onSkip, onLookupResult, autoLookup = true }: EanScannerProps) {
-  const [mode, setMode] = useState<'choice' | 'camera' | 'confirm' | 'manual'>('choice');
+  const [mode, setMode] = useState<'choice' | 'permission' | 'camera' | 'confirm' | 'manual'>('choice');
   const [manualEan, setManualEan] = useState('');
   const [detectedEan, setDetectedEan] = useState('');
   const [error, setError] = useState('');
+  const [cameraErrorType, setCameraErrorType] = useState<CameraErrorType | null>(null);
   const [cameraActive, setCameraActive] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [lookingUp, setLookingUp] = useState(false);
   const [lookupStatus, setLookupStatus] = useState<'idle' | 'searching' | 'found' | 'not_found'>('idle');
   const [torchAvailable, setTorchAvailable] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [successFlash, setSuccessFlash] = useState(false);
+  const [flashEan, setFlashEan] = useState('');
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const flashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const eanLockedRef = useRef(false);
   const detectorRef = useRef<BarcodeDetectorInstance | null>(null);
+  const permissionPrimedRef = useRef(false);
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(SOUND_PREFERENCE_KEY);
+      if (stored === 'off') setSoundEnabled(false);
+    } catch {
+      // localStorage nicht verfuegbar (z.B. privater Modus) — Standard bleibt an
+    }
+  }, []);
+
+  const toggleSound = useCallback(() => {
+    setSoundEnabled((prev) => {
+      const next = !prev;
+      try {
+        window.localStorage.setItem(SOUND_PREFERENCE_KEY, next ? 'on' : 'off');
+      } catch {
+        // ignore persist failure
+      }
+      return next;
+    });
+  }, []);
+
+  /** Kurzer Piepton via WebAudio bei erkanntem Code — failsafe, iOS ignoriert vibrate(). */
+  const playBeep = useCallback(() => {
+    if (!soundEnabled) return;
+    try {
+      const AudioCtx = window.AudioContext
+        ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!AudioCtx) return;
+
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = SCAN_BEEP_FREQUENCY_HZ;
+      gain.gain.setValueAtTime(0.15, ctx.currentTime);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + SCAN_BEEP_DURATION_S);
+      osc.onended = () => ctx.close().catch(() => {});
+    } catch {
+      // WebAudio nicht verfuegbar/blockiert — still weitermachen, kein Absturz
+    }
+  }, [soundEnabled]);
 
   const stopCamera = useCallback(() => {
     if (scanIntervalRef.current) {
@@ -150,14 +224,16 @@ export default function EanScanner({ onScan, onSkip, onLookupResult, autoLookup 
     return detectorRef.current!;
   }, []);
 
+  // Crop-Bereich MUSS mit dem visuellen Overlay (EanScannerOverlay) uebereinstimmen —
+  // beide nutzen dieselben SCAN_REGION_*_PCT Konstanten aus config/constants.ts.
   const cropToScanRegion = useCallback((video: HTMLVideoElement): HTMLCanvasElement | null => {
     const canvas = canvasRef.current || document.createElement('canvas');
     const vw = video.videoWidth;
     const vh = video.videoHeight;
     if (vw === 0 || vh === 0) return null;
 
-    const cropW = Math.round(vw * 0.8);
-    const cropH = Math.round(vh * 0.3);
+    const cropW = Math.round(vw * SCAN_REGION_WIDTH_PCT);
+    const cropH = Math.round(vh * SCAN_REGION_HEIGHT_PCT);
     const cropX = Math.round((vw - cropW) / 2);
     const cropY = Math.round((vh - cropH) / 2);
 
@@ -201,6 +277,9 @@ export default function EanScanner({ onScan, onSkip, onLookupResult, autoLookup 
 
   const startCamera = useCallback(async () => {
     setError('');
+    setCameraErrorType(null);
+    permissionPrimedRef.current = true;
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
@@ -232,17 +311,32 @@ export default function EanScanner({ onScan, onSkip, onLookupResult, autoLookup 
           if (ean && !eanLockedRef.current) {
             eanLockedRef.current = true;
             navigator.vibrate?.(100);
+            playBeep();
+            setFlashEan(ean);
+            setSuccessFlash(true);
             stopCamera();
             setDetectedEan(ean);
-            setMode('confirm');
+
+            flashTimeoutRef.current = setTimeout(() => {
+              setSuccessFlash(false);
+              setMode('confirm');
+            }, SCAN_SUCCESS_FLASH_MS);
           }
         }, BARCODE_SCAN_INTERVAL_MS);
       }
-    } catch {
-      setError('Kamera nicht verfügbar. Bitte manuell eingeben.');
+    } catch (err) {
+      const type = classifyCameraError(err);
+      setCameraErrorType(type);
+      setError(
+        type === 'denied'
+          ? 'Kamerazugriff wurde verweigert.'
+          : type === 'unavailable'
+            ? 'Keine Kamera gefunden.'
+            : 'Kamera nicht verfügbar. Bitte manuell eingeben.'
+      );
       setMode('manual');
     }
-  }, [detectBarcode, stopCamera]);
+  }, [detectBarcode, playBeep, stopCamera]);
 
   useEffect(() => {
     if (mode === 'camera') {
@@ -252,7 +346,14 @@ export default function EanScanner({ onScan, onSkip, onLookupResult, autoLookup 
     }
 
     return () => stopCamera();
-  }, [mode, stopCamera, startCamera]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode]);
+
+  useEffect(() => {
+    return () => {
+      if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current);
+    };
+  }, []);
 
   const validateEan = (ean: string): boolean => {
     const trimmed = ean.trim();
@@ -266,6 +367,16 @@ export default function EanScanner({ onScan, onSkip, onLookupResult, autoLookup 
       return;
     }
     handleEanDetected(trimmed);
+  };
+
+  /** Oeffnet die Kamera — zeigt vor dem allerersten getUserMedia-Aufruf einen erklaerenden Hinweis. */
+  const handleRequestCamera = () => {
+    setError('');
+    if (permissionPrimedRef.current) {
+      setMode('camera');
+    } else {
+      setMode('permission');
+    }
   };
 
   // Lookup Status Overlay
@@ -330,8 +441,8 @@ export default function EanScanner({ onScan, onSkip, onLookupResult, autoLookup 
         </div>
 
         <button
-          onClick={() => setMode('camera')}
-          className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-zinc-900 text-white rounded-lg text-sm font-medium dark:bg-white dark:text-zinc-900"
+          onClick={handleRequestCamera}
+          className="w-full min-h-11 flex items-center justify-center gap-2 py-3 px-4 bg-zinc-900 text-white rounded-lg text-sm font-medium dark:bg-white dark:text-zinc-900"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
@@ -342,7 +453,7 @@ export default function EanScanner({ onScan, onSkip, onLookupResult, autoLookup 
 
         <button
           onClick={() => setMode('manual')}
-          className="w-full py-3 px-4 border border-zinc-300 dark:border-zinc-700 rounded-lg text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-900"
+          className="w-full min-h-11 flex items-center justify-center py-3 px-4 border border-zinc-300 dark:border-zinc-700 rounded-lg text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-900"
         >
           EAN manuell eingeben
         </button>
@@ -350,11 +461,49 @@ export default function EanScanner({ onScan, onSkip, onLookupResult, autoLookup 
         {onSkip && (
           <button
             onClick={onSkip}
-            className="w-full py-2 text-sm text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+            className="w-full min-h-11 flex items-center justify-center py-2 text-sm text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
           >
             Ohne EAN fortfahren
           </button>
         )}
+      </div>
+    );
+  }
+
+  // Permission priming screen — erklaert VOR dem ersten getUserMedia, wofuer die Kamera gebraucht wird
+  if (mode === 'permission') {
+    return (
+      <div className="space-y-4">
+        <div className="text-center py-6">
+          <div className="w-14 h-14 mx-auto mb-3 rounded-full bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center">
+            <svg className="w-7 h-7 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          </div>
+          <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+            Für den Scan Kamera erlauben
+          </p>
+          <p className="text-xs text-zinc-500 mt-2 max-w-xs mx-auto">
+            Die Kamera wird nur zum Scannen des Barcodes verwendet — es werden keine Fotos gespeichert.
+          </p>
+        </div>
+
+        {cameraErrorType && <CameraPermissionNotice type={cameraErrorType} />}
+
+        <button
+          onClick={() => setMode('camera')}
+          className="w-full min-h-11 flex items-center justify-center gap-2 py-3 px-4 bg-zinc-900 text-white rounded-lg text-sm font-medium dark:bg-white dark:text-zinc-900"
+        >
+          Kamera erlauben
+        </button>
+
+        <button
+          onClick={() => setMode('manual')}
+          className="w-full min-h-11 flex items-center justify-center py-3 px-4 border border-zinc-300 dark:border-zinc-700 rounded-lg text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-900"
+        >
+          Lieber manuell eingeben
+        </button>
       </div>
     );
   }
@@ -377,7 +526,7 @@ export default function EanScanner({ onScan, onSkip, onLookupResult, autoLookup 
 
         <button
           onClick={() => handleEanDetected(detectedEan)}
-          className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-green-600 text-white rounded-lg text-sm font-medium"
+          className="w-full min-h-11 flex items-center justify-center gap-2 py-3 px-4 bg-green-600 text-white rounded-lg text-sm font-medium"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -391,7 +540,7 @@ export default function EanScanner({ onScan, onSkip, onLookupResult, autoLookup 
             eanLockedRef.current = false;
             setMode('camera');
           }}
-          className="w-full py-3 px-4 border border-zinc-300 dark:border-zinc-700 rounded-lg text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-900"
+          className="w-full min-h-11 flex items-center justify-center py-3 px-4 border border-zinc-300 dark:border-zinc-700 rounded-lg text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-900"
         >
           Falsch — nochmal scannen
         </button>
@@ -401,7 +550,7 @@ export default function EanScanner({ onScan, onSkip, onLookupResult, autoLookup 
             setManualEan(detectedEan);
             setMode('manual');
           }}
-          className="w-full py-2 text-sm text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+          className="w-full min-h-11 flex items-center justify-center py-2 text-sm text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
         >
           Code korrigieren
         </button>
@@ -422,42 +571,17 @@ export default function EanScanner({ onScan, onSkip, onLookupResult, autoLookup 
             className="w-full h-full object-cover"
           />
 
-          {/* Darkened area outside scan region */}
-          <div className="absolute inset-0 pointer-events-none">
-            <div className="absolute inset-0 bg-black/40" />
-            <div className="absolute left-[10%] right-[10%] top-[35%] bottom-[35%] bg-transparent" style={{boxShadow: '0 0 0 9999px rgba(0,0,0,0.4)'}} />
-            <div className="absolute left-[10%] right-[10%] top-[35%] bottom-[35%] border-2 border-white/80 rounded-lg" />
-            <div className="absolute left-[10%] right-[10%] top-[35%] bottom-[35%] flex items-center justify-center">
-              <div className="w-full h-0.5 bg-red-500/60 animate-pulse" />
-            </div>
-          </div>
-
-          {/* Scanning indicator */}
-          {scanning && cameraActive && (
-            <div className="absolute top-3 left-3 flex items-center gap-1.5 bg-black/60 rounded-full px-2.5 py-1">
-              <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-              <span className="text-xs text-white">Scanne automatisch...</span>
-            </div>
-          )}
-
-          {/* Torch button */}
-          {torchAvailable && (
-            <button
-              onClick={toggleTorch}
-              className="absolute top-3 right-3 flex items-center justify-center w-9 h-9 rounded-full bg-black/60 text-white"
-              aria-label={torchOn ? 'Licht ausschalten' : 'Licht einschalten'}
-            >
-              {torchOn ? (
-                <svg className="w-5 h-5 text-yellow-300" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z"/>
-                </svg>
-              ) : (
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z"/>
-                </svg>
-              )}
-            </button>
-          )}
+          <EanScannerOverlay
+            scanning={scanning}
+            cameraActive={cameraActive}
+            torchAvailable={torchAvailable}
+            torchOn={torchOn}
+            onToggleTorch={toggleTorch}
+            soundEnabled={soundEnabled}
+            onToggleSound={toggleSound}
+            successFlash={successFlash}
+            flashEan={flashEan}
+          />
         </div>
 
         {error && (
@@ -467,19 +591,19 @@ export default function EanScanner({ onScan, onSkip, onLookupResult, autoLookup 
         <canvas ref={canvasRef} className="hidden" />
 
         <p className="text-xs text-zinc-500 text-center">
-          Barcode im Rahmen positionieren — wird automatisch erkannt
+          Barcode mittig im Rahmen halten — wird automatisch erkannt
         </p>
 
         <div className="flex gap-2">
           <button
             onClick={() => setMode('manual')}
-            className="flex-1 py-2.5 text-sm border border-zinc-300 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-900"
+            className="flex-1 min-h-11 flex items-center justify-center py-2.5 text-sm border border-zinc-300 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-900"
           >
             Manuell eingeben
           </button>
           <button
             onClick={() => setMode('choice')}
-            className="flex-1 py-2.5 text-sm border border-zinc-300 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-900"
+            className="flex-1 min-h-11 flex items-center justify-center py-2.5 text-sm border border-zinc-300 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-900"
           >
             Abbrechen
           </button>
@@ -488,16 +612,19 @@ export default function EanScanner({ onScan, onSkip, onLookupResult, autoLookup 
     );
   }
 
-  // Manual mode
+  // Manual mode — vollwertige Alternative zum Kamera-Scan, nicht nur Fallback
   return (
     <div className="space-y-4">
+      {cameraErrorType && <CameraPermissionNotice type={cameraErrorType} />}
+
       <div>
         <label className="block text-sm font-medium mb-1 text-zinc-700 dark:text-zinc-300">
           EAN / Artikelnummer
         </label>
         <input
           type="text"
-          inputMode="text"
+          inputMode="numeric"
+          pattern="[0-9]*"
           value={manualEan}
           onChange={(e) => {
             setManualEan(e.target.value);
@@ -507,7 +634,7 @@ export default function EanScanner({ onScan, onSkip, onLookupResult, autoLookup 
             if (e.key === 'Enter') handleManualSubmit();
           }}
           placeholder="z.B. 4012345678901 oder eigene Nr."
-          className="w-full px-3 py-2 text-base border rounded-lg bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700 focus:outline-none focus:ring-2 focus:ring-zinc-500"
+          className="w-full min-h-11 px-3 py-2 text-base border rounded-lg bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700 focus:outline-none focus:ring-2 focus:ring-zinc-500"
           autoFocus
         />
         {error && (
@@ -518,21 +645,21 @@ export default function EanScanner({ onScan, onSkip, onLookupResult, autoLookup 
       <button
         onClick={handleManualSubmit}
         disabled={!manualEan.trim() || lookingUp}
-        className="w-full py-3 px-4 bg-zinc-900 text-white rounded-lg text-sm font-medium disabled:opacity-50 dark:bg-white dark:text-zinc-900"
+        className="w-full min-h-11 flex items-center justify-center py-3 px-4 bg-zinc-900 text-white rounded-lg text-sm font-medium disabled:opacity-50 dark:bg-white dark:text-zinc-900"
       >
-        {lookingUp ? 'Suche...' : 'Weiter'}
+        {lookingUp ? 'Suche...' : 'Suchen'}
       </button>
 
       <div className="flex gap-2">
         <button
-          onClick={() => setMode('camera')}
-          className="flex-1 py-2 text-sm text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white"
+          onClick={handleRequestCamera}
+          className="flex-1 min-h-11 flex items-center justify-center py-2 text-sm text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white"
         >
           Kamera nutzen
         </button>
         <button
           onClick={() => setMode('choice')}
-          className="flex-1 py-2 text-sm text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white"
+          className="flex-1 min-h-11 flex items-center justify-center py-2 text-sm text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white"
         >
           Zurück
         </button>
@@ -541,7 +668,7 @@ export default function EanScanner({ onScan, onSkip, onLookupResult, autoLookup 
       {onSkip && (
         <button
           onClick={onSkip}
-          className="w-full py-2 text-sm text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+          className="w-full min-h-11 flex items-center justify-center py-2 text-sm text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
         >
           Ohne EAN fortfahren
         </button>
