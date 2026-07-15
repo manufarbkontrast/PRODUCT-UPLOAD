@@ -23,8 +23,13 @@ ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL \
     NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY \
     NEXT_PUBLIC_BASE_PATH=$NEXT_PUBLIC_BASE_PATH \
     DOCKER_BUILD=1 \
-    NEXT_TELEMETRY_DISABLED=1
+    NEXT_TELEMETRY_DISABLED=1 \
+    NODE_OPTIONS=--max-old-space-size=3072
 
+# NODE_OPTIONS hebt das V8-Heap-Limit an (Default ~2 GB reicht für diesen Build
+# mit sharp + Bildverarbeitungs-Routen nicht). Auf dem 4-GB-Host braucht das
+# physische Deckung durch Swap (siehe deploy/README bzw. Server-Setup), da neben
+# dem Build der Cockpit-Container weiterläuft.
 RUN npx next build
 
 FROM node:22-alpine AS runner
