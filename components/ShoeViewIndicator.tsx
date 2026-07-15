@@ -33,7 +33,7 @@ export function MissingViewsBar({ missingLabels }: MissingViewsBarProps) {
         <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
         </svg>
-        Alle 5 Standardansichten vorhanden
+        Alle {SHOE_VIEWS.length} Standardansichten vorhanden
       </div>
     );
   }
@@ -64,12 +64,12 @@ interface ShoeViewOverviewProps {
   readonly images: ReadonlyArray<{ sortOrder: number }>;
 }
 
-/** Overview of all 5 standard views with present/missing status. */
+/** Overview of all 4 standard views with present/missing status. */
 export function ShoeViewOverview({ images }: ShoeViewOverviewProps) {
   const presentOrders = new Set(images.map((i) => i.sortOrder));
 
   return (
-    <div className="grid grid-cols-5 gap-1.5">
+    <div className="grid grid-cols-4 gap-1.5">
       {SHOE_VIEWS.map((view: ShoeView) => {
         const present = presentOrders.has(view.sortOrder);
         return (

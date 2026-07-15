@@ -32,27 +32,26 @@ const CLASSIFY_PROMPT = `You are a shoe photography classifier for an e-commerce
 
 FIRST: Count the number of shoes visible in each image. This is the most important step.
 
-Classify each image into exactly ONE of these view types:
-
-TWO SHOES (a pair):
-- back_pair_angled: TWO shoes photographed from behind at a slight angle. You can see the back/heel area of both shoes. They are placed side by side.
-- heel_pair: TWO shoes photographed STRAIGHT from behind (perfectly symmetric). Both heels clearly visible, perfectly aligned.
+Classify each image into exactly ONE of these 4 canonical view types:
 
 ONE SHOE only:
-- side_outer: ONE shoe from the side (lateral/profile view). The full length of the shoe is visible horizontally.
-- sole: The bottom/outsole of ONE shoe. You see the tread pattern and sole material.
-- angled_front: ONE shoe at a 3/4 angle from the front. The toe area faces toward the camera at an angle.
+- seite_aussen: ONE shoe standing upright, photographed from the side at shoe height (lateral/profile view). The full length of the shoe is visible horizontally, toe pointing left.
+- sohle: The bottom/outsole of ONE shoe, laid down so the sole faces the camera. You see the tread pattern and sole material.
+- schraeg_vorne: ONE shoe standing upright, turned slightly toward the camera (3/4 view from the front). The toe area faces toward the camera at an angle.
+
+TWO SHOES (a pair):
+- paar_profil: TWO shoes placed together, both shown roughly in profile/side view (a pair, not a single shoe).
 
 CRITICAL RULES:
 1. FIRST count shoes: 1 shoe or 2 shoes? This determines the category.
-2. TWO shoes = ALWAYS "back_pair_angled" or "heel_pair" (never "angled_front")
-3. ONE shoe from the side = "side_outer"
-4. ONE shoe at an angle = "angled_front"
-5. Sole/bottom view = "sole"
+2. TWO shoes = ALWAYS "paar_profil" (never one of the single-shoe views)
+3. ONE shoe from the side, standing upright = "seite_aussen"
+4. ONE shoe at a 3/4 angle from the front = "schraeg_vorne"
+5. Sole/bottom view = "sohle"
 6. If uncertain, use "unknown"
 
 Return ONLY a JSON array, no other text. Example:
-[{"index": 0, "view": "side_outer"}, {"index": 1, "view": "back_pair_angled"}]`;
+[{"index": 0, "view": "seite_aussen"}, {"index": 1, "view": "paar_profil"}]`;
 
 /**
  * Classifies shoe images by view type using Gemini vision.
@@ -132,8 +131,8 @@ export async function classifyShoeImages(
       sortOrder = standardSortOrder;
       usedSortOrders.add(sortOrder);
     } else {
-      // Duplicate or unknown: find next available slot >= 5
-      sortOrder = 5;
+      // Duplicate or unknown: find next available slot after the canonical views
+      sortOrder = SHOE_VIEWS.length;
       while (usedSortOrders.has(sortOrder)) sortOrder++;
       usedSortOrders.add(sortOrder);
     }
@@ -150,7 +149,7 @@ export async function classifyShoeImages(
   for (let i = 0; i < images.length; i++) {
     const alreadyClassified = results.some((r) => r.id === images[i].id);
     if (!alreadyClassified) {
-      let sortOrder = 5;
+      let sortOrder = SHOE_VIEWS.length;
       while (usedSortOrders.has(sortOrder)) sortOrder++;
       usedSortOrders.add(sortOrder);
 

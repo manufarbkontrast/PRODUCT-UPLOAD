@@ -309,7 +309,7 @@ ALLOWED TO CHANGE:
 - Lighting (improve to studio quality)`;
 
 const SHOE_VIEW_PROMPTS: Record<string, string> = {
-  side_outer: `${SHOE_BASE}
+  seite_aussen: `${SHOE_BASE}
 
 VIEW-SPECIFIC RULES FOR SIDE VIEW:
 - This is a SINGLE shoe photographed from the side (profile/lateral view)
@@ -323,35 +323,7 @@ VIEW-SPECIFIC RULES FOR SIDE VIEW:
 TRANSFORM: background to white, lighting, centering, add subtle shadow, horizontal flip if toe points right, resize product to fill 60-65% of image height
 NEVER CHANGE: camera angle, product proportions`,
 
-  back_pair_angled: `${SHOE_BASE}
-
-VIEW-SPECIFIC RULES FOR BACK PAIR ANGLED VIEW:
-- This is a PAIR of shoes (TWO shoes) photographed from behind at a slight angle
-- Both shoes must be fully visible and clearly separated
-- The shoe toes MUST point to the LEFT side of the image
-- If the toes point to the RIGHT, MIRROR/FLIP the entire image horizontally
-- If the toes already point LEFT, keep orientation as-is
-- Both shoes should be evenly lit and equally sharp
-- The angle should show the back/heel area of both shoes
-- Maintain the natural spacing between the two shoes
-
-TRANSFORM: background to white, lighting, centering, add subtle shadow, horizontal flip if toes point right, resize product to fill 60-65% of image height
-NEVER CHANGE: shoe arrangement, camera angle, product proportions`,
-
-  heel_pair: `${SHOE_BASE}
-
-VIEW-SPECIFIC RULES FOR HEEL PAIR VIEW:
-- This is a PAIR of shoes (TWO shoes) photographed STRAIGHT from behind
-- Both heels must be clearly visible and perfectly aligned
-- The view should be symmetric - both shoes at equal distance from center
-- Do NOT flip or mirror this image
-- Both shoes should be evenly lit
-- The heel counter, pull tabs, and back details should be clearly visible
-
-TRANSFORM: background to white, lighting, centering, add subtle shadow, resize product to fill 60-65% of image height
-NEVER CHANGE: shoe arrangement, symmetry, orientation, camera angle, product proportions`,
-
-  sole: `${SHOE_BASE}
+  sohle: `${SHOE_BASE}
 
 VIEW-SPECIFIC RULES FOR SOLE VIEW:
 - This shows the BOTTOM/OUTSOLE of the shoe
@@ -365,7 +337,7 @@ VIEW-SPECIFIC RULES FOR SOLE VIEW:
 TRANSFORM: background to white, lighting, centering, rotation if needed for toe-up orientation, resize product to fill 60-65% of image height
 NEVER CHANGE: camera angle, product proportions`,
 
-  angled_front: `${SHOE_BASE}
+  schraeg_vorne: `${SHOE_BASE}
 
 VIEW-SPECIFIC RULES FOR ANGLED FRONT VIEW:
 - This is a SINGLE shoe at a 3/4 angle from the front
@@ -377,6 +349,20 @@ VIEW-SPECIFIC RULES FOR ANGLED FRONT VIEW:
 
 TRANSFORM: background to white, lighting, centering, add subtle shadow, horizontal flip if toe points right, resize product to fill 60-65% of image height
 NEVER CHANGE: camera angle, product proportions`,
+
+  paar_profil: `${SHOE_BASE}
+
+VIEW-SPECIFIC RULES FOR PAIR IN PROFILE VIEW:
+- This is a PAIR of shoes (TWO shoes) placed together, both shown roughly in profile/side view
+- Both shoes must be fully visible and clearly separated
+- The shoe toes MUST point to the LEFT side of the image
+- If the toes point to the RIGHT, MIRROR/FLIP the entire image horizontally
+- If the toes already point LEFT, keep orientation as-is
+- Both shoes should be evenly lit and equally sharp
+- Maintain the natural spacing between the two shoes
+
+TRANSFORM: background to white, lighting, centering, add subtle shadow, horizontal flip if toes point right, resize product to fill 60-65% of image height
+NEVER CHANGE: shoe arrangement, camera angle, product proportions`,
 };
 
 /**

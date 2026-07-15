@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 400" role="img" aria-labelledby="t2-sohle-sil-title">
+  <title id="t2-sohle-sil-title">Ausricht-Schablone Sohle: Unterseite des Schuhs, Spitze oben</title>
+
+  <!-- Kamera-Viewfinder Eckmarken -->
+  <g stroke="#6b7280" stroke-width="2" stroke-opacity="0.4" fill="none" stroke-linecap="round">
+    <path d="M16,16 L16,40 M16,16 L40,16"/>
+    <path d="M284,16 L284,40 M284,16 L260,16"/>
+    <path d="M16,384 L16,360 M16,384 L40,384"/>
+    <path d="M284,384 L284,360 M284,384 L260,384"/>
+  </g>
+
+  <!-- Sohlen-Silhouette (Zielpose: Unterseite, Spitze oben) -->
+  <g transform="translate(73,55) scale(2.2)" fill="#6b7280" fill-opacity="0.25" stroke="#6b7280" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" stroke-opacity="0.85">
+    <path d="M35,4 C50,4 60,18 62,36 C64,54 60,70 54,84 C50,94 46,102 44,112 C43,120 40,126 35,128 C30,126 27,120 26,112 C24,102 20,94 16,84 C10,70 6,54 8,36 C10,18 20,4 35,4 Z"/>
+    <line x1="14" y1="50" x2="56" y2="50" stroke-width="1.4"/>
+    <line x1="12" y1="70" x2="58" y2="70" stroke-width="1.4"/>
+    <line x1="16" y1="95" x2="54" y2="95" stroke-width="1.4"/>
+  </g>
+</svg>

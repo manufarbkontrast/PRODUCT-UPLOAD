@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 400" role="img" aria-labelledby="t4-paar-sil-title">
+  <title id="t4-paar-sil-title">Ausricht-Schablone Paar im Profil: zwei Schuhe im Profil</title>
+
+  <!-- Kamera-Viewfinder Eckmarken -->
+  <g stroke="#6b7280" stroke-width="2" stroke-opacity="0.4" fill="none" stroke-linecap="round">
+    <path d="M16,16 L16,40 M16,16 L40,16"/>
+    <path d="M284,16 L284,40 M284,16 L260,16"/>
+    <path d="M16,384 L16,360 M16,384 L40,384"/>
+    <path d="M284,384 L284,360 M284,384 L260,384"/>
+  </g>
+
+  <!-- Bodenlinie -->
+  <line x1="20" y1="243" x2="280" y2="243" stroke="#6b7280" stroke-width="1.5" stroke-opacity="0.35" stroke-dasharray="4 6"/>
+
+  <!-- Hinterer Schuh (Zielpose Nr. 2) -->
+  <g transform="translate(2.5,144) scale(1.05) translate(70,-14)" fill="#6b7280" fill-opacity="0.18" stroke="#6b7280" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round" stroke-opacity="0.65">
+    <path d="M12,94 C8,86 9,76 16,68 C26,56 42,46 62,39 C86,31 112,27 136,26 C142,26 146,29 150,33 C156,30 164,27 172,27 C182,27 191,33 196,44 C200,53 200,63 197,73 C195,81 190,88 182,94 L182,94 L12,94 Z"/>
+  </g>
+
+  <!-- Vorderer Schuh (Zielpose Nr. 1) -->
+  <g transform="translate(2.5,144) scale(1.05)" fill="#6b7280" fill-opacity="0.25" stroke="#6b7280" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" stroke-opacity="0.85">
+    <path d="M12,94 C8,86 9,76 16,68 C26,56 42,46 62,39 C86,31 112,27 136,26 C142,26 146,29 150,33 C156,30 164,27 172,27 C182,27 191,33 196,44 C200,53 200,63 197,73 C195,81 190,88 182,94 L182,94 L12,94 Z"/>
+  </g>
+</svg>
