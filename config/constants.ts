@@ -15,6 +15,16 @@ export const BARCODE_SCAN_INTERVAL_MS = 500;
 export const SCAN_REGION_WIDTH_PCT = 0.86;
 export const SCAN_REGION_HEIGHT_PCT = 0.42;
 
+/**
+ * Seitenverhaeltnis des Video-Containers in EanScanner.tsx (Tailwind
+ * `aspect-[4/3]`). Der Container ist fix (nicht responsiv), daher genuegt
+ * eine geteilte Konstante statt einer DOM-Messung zur Laufzeit — beide
+ * Stellen MUESSEN denselben Wert nutzen, sonst weicht der fuer die
+ * Barcode-Erkennung gecroppte Bereich vom sichtbaren object-cover-Fenster ab
+ * (siehe lib/scan-crop.ts).
+ */
+export const SCAN_CONTAINER_ASPECT = 4 / 3;
+
 /** Dauer (ms) des gruenen Erfolgs-Overlays nach erkanntem Barcode */
 export const SCAN_SUCCESS_FLASH_MS = 650;
 

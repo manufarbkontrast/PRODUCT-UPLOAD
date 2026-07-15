@@ -7,12 +7,14 @@ import {
   BARCODE_SCAN_INTERVAL_MS,
   SCAN_BEEP_DURATION_S,
   SCAN_BEEP_FREQUENCY_HZ,
+  SCAN_CONTAINER_ASPECT,
   SCAN_REGION_HEIGHT_PCT,
   SCAN_REGION_WIDTH_PCT,
   SCAN_SUCCESS_FLASH_MS,
 } from '@/config/constants';
 import CameraPermissionNotice, { type CameraErrorType } from '@/components/CameraPermissionNotice';
 import EanScannerOverlay from '@/components/EanScannerOverlay';
+import { computeScanCropRect } from '@/lib/scan-crop';
 
 interface JtlLookupResponse {
   readonly found: boolean;
@@ -224,25 +226,33 @@ export default function EanScanner({ onScan, onSkip, onLookupResult, autoLookup 
     return detectorRef.current!;
   }, []);
 
-  // Crop-Bereich MUSS mit dem visuellen Overlay (EanScannerOverlay) uebereinstimmen —
-  // beide nutzen dieselben SCAN_REGION_*_PCT Konstanten aus config/constants.ts.
+  // Crop-Bereich MUSS mit dem visuellen Overlay (EanScannerOverlay) uebereinstimmen.
+  // Das <video> wird per object-cover in einen SCAN_CONTAINER_ASPECT-Container
+  // (aspect-[4/3]) skaliert, wodurch bei abweichendem Kamera-Seitenverhaeltnis
+  // (z.B. 16:9) nur ein zentrierter Ausschnitt des Rohbilds sichtbar ist. Das
+  // Overlay positioniert SCAN_REGION_*_PCT relativ zu diesem sichtbaren
+  // Ausschnitt — der Crop fuer die Barcode-Erkennung muss das ebenfalls tun,
+  // sonst liest er einen groesseren/verschobenen Bereich als der Nutzer sieht.
+  // Die eigentliche Geometrie steckt in lib/scan-crop.ts (mit eigenen Tests).
   const cropToScanRegion = useCallback((video: HTMLVideoElement): HTMLCanvasElement | null => {
     const canvas = canvasRef.current || document.createElement('canvas');
     const vw = video.videoWidth;
     const vh = video.videoHeight;
     if (vw === 0 || vh === 0) return null;
 
-    const cropW = Math.round(vw * SCAN_REGION_WIDTH_PCT);
-    const cropH = Math.round(vh * SCAN_REGION_HEIGHT_PCT);
-    const cropX = Math.round((vw - cropW) / 2);
-    const cropY = Math.round((vh - cropH) / 2);
+    const { sx, sy, sw, sh } = computeScanCropRect(
+      { videoWidth: vw, videoHeight: vh },
+      SCAN_CONTAINER_ASPECT,
+      SCAN_REGION_WIDTH_PCT,
+      SCAN_REGION_HEIGHT_PCT
+    );
 
-    canvas.width = cropW;
-    canvas.height = cropH;
+    canvas.width = sw;
+    canvas.height = sh;
     const ctx = canvas.getContext('2d');
     if (!ctx) return null;
 
-    ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+    ctx.drawImage(video, sx, sy, sw, sh, 0, 0, sw, sh);
     return canvas;
   }, []);
 
@@ -562,6 +572,8 @@ export default function EanScanner({ onScan, onSkip, onLookupResult, autoLookup 
   if (mode === 'camera') {
     return (
       <div className="space-y-3">
+        {/* aspect-[4/3] MUSS mit SCAN_CONTAINER_ASPECT (config/constants.ts) uebereinstimmen —
+            der Crop in cropToScanRegion() rechnet mit diesem Seitenverhaeltnis. */}
         <div className="relative aspect-[4/3] bg-black rounded-lg overflow-hidden">
           <video
             ref={videoRef}
