@@ -33,6 +33,13 @@
 services:
   erfassung:
     build:
+      # ACHTUNG: NEXT_PUBLIC_* werden von Next.js beim BUILD fest in den Bundle
+      # eingebacken (webpack DefinePlugin), nicht zur Laufzeit gelesen. Ändert
+      # man einen NEXT_PUBLIC_*-Wert in deploy/.env, wirkt das ERST nach einem
+      # `docker compose build` (bzw. `up -d --build`) — ein reiner `restart`
+      # bleibt wirkungslos. Die gleichnamigen Einträge unter `environment:`
+      # unten sind für NEXT_PUBLIC_* daher zur Laufzeit tot (nur für die echten
+      # Server-Secrets wie SUPABASE_SERVICE_ROLE_KEY/GEMINI_API_KEY relevant).
       context: ..
       dockerfile: deploy/Dockerfile
       args:

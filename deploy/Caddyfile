@@ -7,7 +7,7 @@
 # 167.233.218.238 bedient) auch die Requests unter "/erfassung/*" an den
 # "erfassung"-Container weiterleiten. Dafür:
 #
-#   1. Den Block "handle_path /erfassung/*" unten in JEDEN Host-Block der
+#   1. Den Block "handle /erfassung/*" unten in JEDEN Host-Block der
 #      bestehenden brain-cockpit/deploy/Caddyfile einfügen (also sowohl in
 #      den sslip.io-Block als auch den reinen IP-Block — siehe dort).
 #   2. Sicherstellen, dass der Cockpit-Caddy-Container im selben Docker-
