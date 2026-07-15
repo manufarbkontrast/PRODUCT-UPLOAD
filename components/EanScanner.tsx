@@ -2,7 +2,51 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import type { EanLookupResult } from '@/config/ean-lookup-mappings';
+import type { JtlArticle } from '@/lib/jtl/cache';
 import { BARCODE_SCAN_INTERVAL_MS } from '@/config/constants';
+
+interface JtlLookupResponse {
+  readonly found: boolean;
+  readonly article?: JtlArticle;
+  readonly variants?: readonly JtlArticle[];
+  readonly totalStock?: number;
+}
+
+/** Extrahiert die Groesse aus einer JTL-SKU (letztes Segment nach dem letzten "-"). */
+function extractSizeFromSku(sku: string): string {
+  const lastDash = sku.lastIndexOf('-');
+  return lastDash === -1 ? '' : sku.substring(lastDash + 1);
+}
+
+/** Mappt die /api/jtl-lookup Antwort auf das von der UI erwartete EanLookupResult-Format. */
+function mapJtlResultToLookup(data: JtlLookupResponse): EanLookupResult {
+  const article = data.article;
+  if (!data.found || !article) return { found: false };
+
+  const price = article.suggestedRetailPrice > 0
+    ? article.suggestedRetailPrice.toFixed(2)
+    : article.salesPriceNet > 0
+      ? article.salesPriceNet.toFixed(2)
+      : undefined;
+
+  return {
+    found: true,
+    source: 'jtl',
+    name: article.name,
+    sku: article.sku,
+    barcode: article.gtin || undefined,
+    price,
+    size: extractSizeFromSku(article.sku),
+    inventoryQuantity: data.totalStock ?? article.availableStock,
+    confidence: 'high',
+    variants: (data.variants ?? []).map((v) => ({
+      sku: v.sku,
+      size: extractSizeFromSku(v.sku),
+      stock: v.availableStock,
+      ean: v.gtin,
+    })),
+  };
+}
 
 interface EanScannerProps {
   readonly onScan: (ean: string) => void;
@@ -58,17 +102,18 @@ export default function EanScanner({ onScan, onSkip, onLookupResult, autoLookup 
     setLookupStatus('searching');
 
     try {
-      const res = await fetch('/api/ean-lookup', {
+      const res = await fetch('/api/jtl-lookup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ean }),
       });
 
-      const data: EanLookupResult = await res.json();
+      const data: JtlLookupResponse = await res.json();
+      const mapped = mapJtlResultToLookup(data);
 
-      if (data.found) {
+      if (mapped.found) {
         setLookupStatus('found');
-        onLookupResult(data);
+        onLookupResult(mapped);
       } else {
         setLookupStatus('not_found');
         onLookupResult({ found: false });

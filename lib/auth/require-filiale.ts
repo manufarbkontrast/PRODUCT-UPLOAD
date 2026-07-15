@@ -8,6 +8,15 @@ export function isFilialeCode(value: string): value is FilialeCode {
   return (FILIALE_CODES as readonly string[]).includes(value);
 }
 
+// mycrafton profiles.role: check (role in ('verkaeufer','buero','admin')), default 'verkaeufer'.
+// Nur diese Rollen duerfen Artikel erfassen.
+export const ERFASSUNG_ROLES = ['verkaeufer', 'buero', 'admin'] as const;
+export type ErfassungRole = typeof ERFASSUNG_ROLES[number];
+
+export function isErfassungRole(value: string | null | undefined): value is ErfassungRole {
+  return !!value && (ERFASSUNG_ROLES as readonly string[]).includes(value);
+}
+
 /**
  * Resolve the current Supabase user's filiale from the profiles table.
  * Returns either { filiale, userId } or an error NextResponse (401/403).
@@ -29,11 +38,12 @@ export async function requireFiliale(): Promise<
 
   // Use service-role client: profiles RLS only allows the owner to select,
   // but service-role bypasses RLS so this works uniformly for every user.
+  // mycrafton profiles: PK-Spalte heisst "id" (referenziert auth.users.id), nicht "user_id".
   const admin = createServiceRoleClient();
   const { data, error } = await admin
     .from('profiles')
-    .select('filiale')
-    .eq('user_id', user.id)
+    .select('filiale, role')
+    .eq('id', user.id)
     .maybeSingle();
 
   if (error || !data || !isFilialeCode(data.filiale)) {
@@ -42,6 +52,17 @@ export async function requireFiliale(): Promise<
       userId: null,
       error: NextResponse.json(
         { error: 'Keine Filiale zugewiesen' },
+        { status: 403 }
+      ),
+    };
+  }
+
+  if (!isErfassungRole(data.role)) {
+    return {
+      filiale: null,
+      userId: null,
+      error: NextResponse.json(
+        { error: 'Keine Berechtigung zum Erfassen' },
         { status: 403 }
       ),
     };

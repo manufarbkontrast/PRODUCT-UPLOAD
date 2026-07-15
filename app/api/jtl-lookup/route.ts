@@ -88,11 +88,11 @@ async function loadArticleName(sku: string): Promise<string | null> {
     );
     const { data } = await sb
       .from('jtl_articles')
-      .select('artikel_name')
+      .select('name')
       .eq('sku', sku)
       .limit(1)
       .single();
-    return data?.artikel_name || null;
+    return data?.name || null;
   } catch {
     return null;
   }
@@ -112,7 +112,7 @@ async function loadVariantsWithStock(article: JtlArticle) {
     // Find k_artikel for this SKU to get vater_artikel_id
     const { data: artRow } = await sb
       .from('jtl_articles')
-      .select('k_artikel, vater_artikel_id, artikel_name')
+      .select('k_artikel, vater_artikel_id, name')
       .eq('sku', article.sku)
       .limit(1)
       .single();
@@ -147,7 +147,7 @@ async function loadVariantsWithStock(article: JtlArticle) {
 
     return siblings.map(s => ({
       sku: s.sku,
-      name: s.artikel_name || s.sku,
+      name: s.name || s.sku,
       description: '',
       gtin: s.barcode || '',
       ownIdentifier: '',

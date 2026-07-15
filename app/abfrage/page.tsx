@@ -97,26 +97,19 @@ export default function AbfragePage() {
 
     const fetchData = async () => {
       try {
-        // JTL Daten abfragen
-        const [lookupRes, jtlRes] = await Promise.all([
-          fetch('/api/ean-lookup', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ean: scannedEan }),
-          }),
-          fetch('/api/jtl-lookup', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ean: scannedEan }),
-          }),
-        ]);
-
-        const lookupData: EanLookupResult = await lookupRes.json();
-        setProductInfo({ ean: scannedEan, lookup: lookupData });
+        // JTL Daten abfragen (kanonischer Pfad: Supabase statt Google-Drive-Cache)
+        const jtlRes = await fetch('/api/jtl-lookup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ean: scannedEan }),
+        });
 
         if (jtlRes.ok) {
           const jtlData: JtlResult = await jtlRes.json();
           setJtlResult(jtlData);
+          setProductInfo({ ean: scannedEan, lookup: { found: jtlData.found } });
+        } else {
+          setProductInfo({ ean: scannedEan, lookup: { found: false } });
         }
       } catch (err) {
         console.warn('[Abfrage] Lookup failed:', err);
