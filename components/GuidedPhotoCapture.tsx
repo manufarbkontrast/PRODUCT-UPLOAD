@@ -272,7 +272,7 @@ export default function GuidedPhotoCapture({
             Alle 4 Ansichten aufgenommen
           </p>
           {processError ? (
-            <p className="text-sm text-red-600 mt-1">{processError}</p>
+            <p className="text-sm text-destructive mt-1">{processError}</p>
           ) : (
             <p className="text-xs text-muted-foreground mt-1">Verarbeitung wurde gestartet...</p>
           )}
@@ -405,7 +405,7 @@ export default function GuidedPhotoCapture({
           </div>
 
           {uploadError && (
-            <p className="text-sm text-red-600 text-center">{uploadError}</p>
+            <p className="text-sm text-destructive text-center">{uploadError}</p>
           )}
 
           <div className="flex gap-2">
@@ -419,7 +419,7 @@ export default function GuidedPhotoCapture({
             <button
               onClick={handleConfirm}
               disabled={uploading}
-              className="flex-1 min-h-11 flex items-center justify-center gap-2 py-2.5 text-sm bg-green-600 text-white rounded-lg font-medium disabled:opacity-50"
+              className="flex-1 min-h-11 flex items-center justify-center gap-2 py-2.5 text-sm bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium disabled:opacity-50"
             >
               {uploading ? 'Lädt hoch...' : 'Übernehmen'}
             </button>

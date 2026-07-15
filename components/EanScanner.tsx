@@ -537,7 +537,7 @@ export default function EanScanner({ onScan, onSkip, onLookupResult, autoLookup 
 
         <button
           onClick={() => handleEanDetected(detectedEan)}
-          className="w-full min-h-11 flex items-center justify-center gap-2 py-3 px-4 bg-green-600 text-white rounded-lg text-sm font-medium"
+          className="w-full min-h-11 flex items-center justify-center gap-2 py-3 px-4 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm font-medium"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -598,7 +598,7 @@ export default function EanScanner({ onScan, onSkip, onLookupResult, autoLookup 
         </div>
 
         {error && (
-          <p className="text-sm text-red-600 text-center">{error}</p>
+          <p className="text-sm text-destructive text-center">{error}</p>
         )}
 
         <canvas ref={canvasRef} className="hidden" />
@@ -651,7 +651,7 @@ export default function EanScanner({ onScan, onSkip, onLookupResult, autoLookup 
           autoFocus
         />
         {error && (
-          <p className="mt-1 text-sm text-red-600">{error}</p>
+          <p className="mt-1 text-sm text-destructive">{error}</p>
         )}
       </div>
 

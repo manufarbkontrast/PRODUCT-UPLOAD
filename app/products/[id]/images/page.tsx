@@ -277,7 +277,7 @@ export default function ProductImagesPage({
     return (
       <div className="text-center py-12">
         <p className="text-muted-foreground">Produkt nicht gefunden</p>
-        <Button onClick={() => router.push('/')} className="mt-4">
+        <Button onClick={() => router.push('/')} className="mt-4 min-h-11">
           Zurück zum Scanner
         </Button>
       </div>
@@ -395,7 +395,7 @@ export default function ProductImagesPage({
       {isUploaded && (
         <div className="bg-green-900/20 border border-green-800 rounded-xl p-4 space-y-3">
           <div className="flex items-center gap-2">
-            <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
             <span className="font-medium text-green-400">
@@ -535,7 +535,7 @@ export default function ProductImagesPage({
         <Button
           onClick={handleProcessImages}
           disabled={processing || isBusy}
-          className="w-full"
+          className="w-full min-h-12 text-base"
         >
           {isBusy ? (
             <span className="flex items-center justify-center gap-2">
@@ -637,7 +637,7 @@ export default function ProductImagesPage({
 
                   <button
                     onClick={() => handleDeleteImage(image.id)}
-                    className="p-2 bg-red-500 rounded-full hover:bg-red-600"
+                    className="p-2 bg-destructive rounded-full hover:bg-destructive/90"
                     title="Löschen"
                   >
                     <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
