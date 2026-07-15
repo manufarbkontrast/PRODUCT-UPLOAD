@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { BRAND_OPTIONS } from '@/config/brands';
+import { withBasePath } from '@/lib/base-path';
 
 export interface ReorderVariant {
   readonly sku: string;
@@ -57,7 +58,7 @@ export default function ReorderButton({
     }
     let cancelled = false;
     setPhase('loading-locks');
-    fetch(`/api/reorder?skus=${encodeURIComponent(skuList)}`)
+    fetch(withBasePath(`/api/reorder?skus=${encodeURIComponent(skuList)}`))
       .then((r) => r.json())
       .then((data) => {
         if (cancelled) return;
@@ -98,7 +99,7 @@ export default function ReorderButton({
     }
     setPhase('submitting');
     try {
-      const res = await fetch('/api/reorder', {
+      const res = await fetch(withBasePath('/api/reorder'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

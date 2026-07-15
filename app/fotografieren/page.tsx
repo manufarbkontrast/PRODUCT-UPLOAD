@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import EanScanner from '@/components/EanScanner';
 import type { EanLookupResult } from '@/config/ean-lookup-mappings';
 import { PRODUCT_POLL_INTERVAL_MS } from '@/config/constants';
+import { withBasePath } from '@/lib/base-path';
 
 interface RecentProduct {
   readonly id: string;
@@ -38,7 +39,7 @@ export default function FotografierenPage() {
 
   const fetchRecentProducts = useCallback(async () => {
     try {
-      const res = await fetch('/api/products');
+      const res = await fetch(withBasePath('/api/products'));
       if (res.ok) {
         const data = await res.json();
         setRecentProducts(data.slice(0, 10));
@@ -95,7 +96,7 @@ export default function FotografierenPage() {
           zalandoAttributes: buildZalandoAttributes(lookupData),
         };
 
-        const res = await fetch('/api/products', {
+        const res = await fetch(withBasePath('/api/products'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(productData),

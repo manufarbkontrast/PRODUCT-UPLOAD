@@ -1,0 +1,56 @@
+name: Deploy
+on:
+  push:
+    branches: [main]
+concurrency:
+  group: deploy-main
+  cancel-in-progress: true
+
+# Benötigte GitHub-Secrets für dieses Repo (Settings -> Secrets and variables -> Actions):
+#   HETZNER_HOST   - Host/IP des gemeinsamen Servers (167.233.218.238)
+#   HETZNER_SSH_KEY - Privater SSH-Key mit Zugriff auf den Server (root)
+#
+# ALLE Laufzeit-Env (inkl. NEXT_PUBLIC_SUPABASE_URL/ANON_KEY als Docker
+# Build-Args, SUPABASE_SERVICE_ROLE_KEY, GEMINI_API_KEY, GOOGLE_*, ...) liegt
+# NICHT in GitHub Secrets, sondern in einer .env-Datei direkt auf dem Server
+# unter /opt/erfassung/deploy/.env (siehe .env.example in diesem Repo, einmalig
+# manuell anlegen). `docker compose` liest diese Datei automatisch (steht im
+# selben Verzeichnis wie docker-compose.yml) für ${VAR}-Substitutionen in
+# Build-Args und environment — sie wird nie über CI/rsync angefasst
+# (--exclude deploy/.env unten).
+#
+# Bis HETZNER_HOST/HETZNER_SSH_KEY angelegt sind, schlägt der
+# deploy-hetzner-Job erwartungsgemäß fehl.
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm test
+      - run: npm run lint
+
+  deploy-hetzner:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - name: SSH-Key einrichten
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.HETZNER_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "${{ secrets.HETZNER_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+      - name: Code auf Server synchronisieren
+        run: |
+          rsync -az --delete \
+            --exclude node_modules --exclude .next --exclude .git \
+            --exclude .superpowers --exclude .playwright-mcp \
+            --exclude deploy/.env \
+            ./ "root@${{ secrets.HETZNER_HOST }}:/opt/erfassung/"
+      - name: Container neu bauen und starten
+        run: |
+          ssh "root@${{ secrets.HETZNER_HOST }}" \
+            "cd /opt/erfassung/deploy && docker compose build --quiet && docker compose up -d && docker image prune -f >/dev/null"

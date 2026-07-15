@@ -18,6 +18,7 @@ import {
 } from '@/lib/guided-capture';
 import CameraPermissionNotice, { type CameraErrorType } from '@/components/CameraPermissionNotice';
 import { ShoeViewOverview } from '@/components/ShoeViewIndicator';
+import { withBasePath } from '@/lib/base-path';
 
 interface GuidedPhotoCaptureProps {
   readonly productId: string;
@@ -152,7 +153,7 @@ export default function GuidedPhotoCapture({
 
     const triggerProcess = async () => {
       try {
-        const res = await fetch(`/api/products/${productId}/process`, { method: 'POST' });
+        const res = await fetch(withBasePath(`/api/products/${productId}/process`), { method: 'POST' });
 
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
@@ -222,7 +223,7 @@ export default function GuidedPhotoCapture({
       formData.append('file', file);
       formData.append('sortOrder', String(view.sortOrder));
 
-      const res = await fetch(`/api/products/${productId}/images`, {
+      const res = await fetch(withBasePath(`/api/products/${productId}/images`), {
         method: 'POST',
         body: formData,
       });
@@ -322,7 +323,7 @@ export default function GuidedPhotoCapture({
         <div className="space-y-4 text-center">
           <div className="bg-zinc-50 dark:bg-zinc-800/50 rounded-xl p-4">
             <img
-              src={view.piktogramm}
+              src={withBasePath(view.piktogramm)}
               alt={view.label}
               className="w-full max-w-[280px] mx-auto"
             />
@@ -367,7 +368,7 @@ export default function GuidedPhotoCapture({
                   className="w-full h-full object-cover"
                 />
                 <img
-                  src={view.silhouette}
+                  src={withBasePath(view.silhouette)}
                   alt=""
                   aria-hidden="true"
                   className="absolute inset-0 w-full h-full object-contain opacity-40 pointer-events-none"

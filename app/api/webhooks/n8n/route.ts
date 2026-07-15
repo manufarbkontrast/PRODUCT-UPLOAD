@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { validateN8nToken } from '@/lib/auth/n8n-auth';
-import { uploadProductToDrive } from '@/lib/google';
+import { uploadProductToDrive, isDriveConfigured } from '@/lib/google';
 
 export async function POST(request: NextRequest) {
   const authError = validateN8nToken(request);
@@ -67,7 +67,16 @@ export async function POST(request: NextRequest) {
           .eq('id', productId)
           .single();
 
-        if (product) {
+        if (product && !isDriveConfigured()) {
+          // Google Drive ist optional: ohne GOOGLE_* Zugangsdaten (z.B. beim
+          // ersten Deploy) bleiben die Fotos in Supabase Storage und das
+          // Produkt wechselt in den normalen Erfolgs-Status — NICHT 'drive_error'.
+          console.log(`[Webhook] Drive nicht konfiguriert — Upload für Produkt ${productId} übersprungen (Fotos bleiben in Supabase Storage).`);
+          await supabase
+            .from('products')
+            .update({ status: 'uploaded' })
+            .eq('id', productId);
+        } else if (product) {
           try {
             // Build image data with public URLs from Supabase Storage
             const imagesWithUrls = allImages.map((img) => {

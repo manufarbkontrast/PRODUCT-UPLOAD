@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getTokensFromCode } from '@/lib/google/auth';
 import { isVercelConfigured, updateEnvVar, triggerRedeploy } from '@/lib/vercel/update-env';
+import { withBasePath } from '@/lib/base-path';
 
 /** Escape HTML special characters to prevent XSS */
 function escapeHtml(str: string): string {
@@ -19,7 +20,7 @@ export async function GET(request: NextRequest) {
 
   if (error) {
     return NextResponse.redirect(
-      new URL(`/?auth_error=${encodeURIComponent(error)}`, request.url)
+      new URL(withBasePath(`/?auth_error=${encodeURIComponent(error)}`), request.url)
     );
   }
 
@@ -93,7 +94,7 @@ export async function GET(request: NextRequest) {
     </button>
   </details>
 
-  <p style="margin-top: 24px;"><a href="/">Zurueck zur App</a></p>
+  <p style="margin-top: 24px;"><a href="${withBasePath('/')}">Zurueck zur App</a></p>
 </body></html>`;
 
     return new NextResponse(html, {
@@ -106,7 +107,7 @@ export async function GET(request: NextRequest) {
   } catch (err) {
     console.error('OAuth callback error:', err);
     return NextResponse.redirect(
-      new URL(`/?auth_error=${encodeURIComponent('Failed to exchange code for tokens')}`, request.url)
+      new URL(withBasePath(`/?auth_error=${encodeURIComponent('Failed to exchange code for tokens')}`), request.url)
     );
   }
 }

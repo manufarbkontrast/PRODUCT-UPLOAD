@@ -11,6 +11,7 @@ import {
 } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { withBasePath } from '@/lib/base-path';
 import type { User, SupabaseClient } from '@supabase/supabase-js';
 
 interface AuthContextType {
@@ -92,7 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     // Auch serverseitig: loescht die Supabase-SSR-Cookies
     try {
-      await fetch('/api/auth/logout', { method: 'POST' });
+      await fetch(withBasePath('/api/auth/logout'), { method: 'POST' });
     } catch {
       // Ignorieren — Client-Signout + Redirect reichen im Zweifel
     }

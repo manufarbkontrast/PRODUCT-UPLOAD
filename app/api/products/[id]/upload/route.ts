@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
-import { uploadProductToDrive } from '@/lib/google';
+import { uploadProductToDrive, isDriveConfigured } from '@/lib/google';
 import { requireUser } from '@/lib/auth/require-user';
 import { resolveStorageUrl } from '@/lib/supabase/storage-url';
 
@@ -41,6 +41,27 @@ export async function POST(
     );
     if (uploadableImages.length === 0) {
       return NextResponse.json({ error: 'Keine uploadbaren Bilder vorhanden' }, { status: 400 });
+    }
+
+    // Google Drive ist optional: ohne GOOGLE_* Zugangsdaten (z.B. beim ersten
+    // Deploy) sollen die Fotos in Supabase Storage bleiben und das Produkt in
+    // einen normalen Erfolgs-Status wechseln — NICHT 'drive_error'.
+    if (!isDriveConfigured()) {
+      console.log(`[Upload] Drive nicht konfiguriert — Upload für Produkt ${id} übersprungen (Fotos bleiben in Supabase Storage).`);
+
+      const { data: updatedProduct } = await supabase
+        .from('products')
+        .update({ status: 'uploaded' })
+        .eq('id', id)
+        .select()
+        .single();
+
+      return NextResponse.json({
+        success: true,
+        driveSkipped: true,
+        driveUrl: updatedProduct?.drive_url ?? null,
+        message: 'Google Drive ist nicht konfiguriert — Bilder bleiben in Supabase Storage.',
+      });
     }
 
     // Update status to uploading

@@ -1,0 +1,53 @@
+# Dieser Block gehört in den gemeinsamen Caddyfile des Servers neben dem
+# Cockpit-Block — nicht separat deployen.
+#
+# Diese App läuft NICHT hinter einem eigenen Caddy-Container (siehe
+# deploy/docker-compose.yml). Stattdessen muss der bestehende Caddy von
+# brain-cockpit (der bereits Port 80/443 auf dem gemeinsamen Hetzner-Host
+# 167.233.218.238 bedient) auch die Requests unter "/erfassung/*" an den
+# "erfassung"-Container weiterleiten. Dafür:
+#
+#   1. Den Block "handle_path /erfassung/*" unten in JEDEN Host-Block der
+#      bestehenden brain-cockpit/deploy/Caddyfile einfügen (also sowohl in
+#      den sslip.io-Block als auch den reinen IP-Block — siehe dort).
+#   2. Sicherstellen, dass der Cockpit-Caddy-Container im selben Docker-
+#      Netzwerk wie der "erfassung"-Container hängt (externes Netzwerk
+#      "shared-edge" — siehe Kommentar in deploy/docker-compose.yml).
+#   3. `docker compose restart caddy` (oder `up -d`) im brain-cockpit-Stack
+#      ausführen, NICHT hier in diesem Repo.
+#
+# Beispiel — Ausschnitt aus brain-cockpit/deploy/Caddyfile NACH der Ergänzung:
+#
+#   167-233-218-238.sslip.io {
+#   	handle /erfassung/* {
+#   		reverse_proxy erfassung:3000
+#   	}
+#   	reverse_proxy app:3000
+#   	encode gzip
+#   }
+#
+#   167.233.218.238 {
+#   	tls {
+#   		issuer acme {
+#   			profile shortlived
+#   		}
+#   	}
+#   	handle /erfassung/* {
+#   		reverse_proxy erfassung:3000
+#   	}
+#   	reverse_proxy app:3000
+#   	encode gzip
+#   }
+#
+# WICHTIG: "handle" MUSS vor dem allgemeinen "reverse_proxy app:3000" stehen
+# (Caddy matched Handler in Reihenfolge) — und NICHT "handle_path" verwenden!
+# "handle_path" würde "/erfassung" vom Pfad abschneiden, bevor er an den
+# Container weitergeleitet wird. Next.js mit basePath: "/erfassung"
+# (next.config.ts) erwartet aber genau umgekehrt: der volle Pfad INKLUSIVE
+# "/erfassung"-Prefix muss beim Next-Server ankommen, da Next intern seine
+# Routen bereits unter "/erfassung/*" registriert. Mit "handle_path" bekäme
+# Next z.B. nur "/api/products" statt "/erfassung/api/products" und würde
+# 404 liefern.
+handle /erfassung/* {
+	reverse_proxy erfassung:3000
+}

@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback } from 'react';
 import { isShoeCategory } from '@/config/shoe-views';
+import { withBasePath } from '@/lib/base-path';
 
 interface ImageFile {
   id: string;
@@ -86,7 +87,7 @@ export default function ImageUploader({ productId, category, existingImageCount 
         }
         isFirstUpload = false;
 
-        const res = await fetch(`/api/products/${productId}/images`, {
+        const res = await fetch(withBasePath(`/api/products/${productId}/images`), {
           method: 'POST',
           body: formData,
         });
@@ -114,7 +115,7 @@ export default function ImageUploader({ productId, category, existingImageCount 
     if (category && isShoeCategory(category)) {
       setClassifying(true);
       try {
-        const classifyRes = await fetch(`/api/products/${productId}/classify`, {
+        const classifyRes = await fetch(withBasePath(`/api/products/${productId}/classify`), {
           method: 'POST',
         });
         if (classifyRes.ok) {

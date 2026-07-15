@@ -15,6 +15,7 @@ import {
 import CameraPermissionNotice, { type CameraErrorType } from '@/components/CameraPermissionNotice';
 import EanScannerOverlay from '@/components/EanScannerOverlay';
 import { computeScanCropRect } from '@/lib/scan-crop';
+import { withBasePath } from '@/lib/base-path';
 
 interface JtlLookupResponse {
   readonly found: boolean;
@@ -178,7 +179,7 @@ export default function EanScanner({ onScan, onSkip, onLookupResult, autoLookup 
     setLookupStatus('searching');
 
     try {
-      const res = await fetch('/api/jtl-lookup', {
+      const res = await fetch(withBasePath('/api/jtl-lookup'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ean }),

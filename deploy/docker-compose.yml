@@ -1,0 +1,78 @@
+# Deploy-Compose für den GEMEINSAMEN Hetzner-Host (167.233.218.238), auf dem
+# diese App ("erfassung") neben "brain-cockpit" (Root "/") läuft.
+#
+# WICHTIG — gemeinsames Docker-Netzwerk erforderlich:
+# Der Caddy-Container von brain-cockpit muss diesen Container per Name
+# ("erfassung:3000") erreichen können. Da beide Apps EIGENSTÄNDIGE
+# docker-compose-Projekte sind (jedes mit eigenem Standard-Netzwerk), reicht
+# es NICHT, beide auf demselben Host laufen zu lassen — sie müssen ein
+# externes Netzwerk teilen. Einmalig auf dem Server einrichten:
+#
+#   docker network create shared-edge
+#
+# Und im brain-cockpit-Compose (/opt/brain-cockpit/deploy/docker-compose.yml,
+# NICHT Teil dieses Repos) beim "app"- und "caddy"-Service ergänzen:
+#
+#   networks:
+#     - default
+#     - shared-edge
+#   ...
+#   networks:
+#     shared-edge:
+#       external: true
+#
+# Diese Datei erledigt das nur für die "erfassung"-Seite — die Änderung am
+# Cockpit-Compose muss von Hand auf dem Server (bzw. im brain-cockpit-Repo)
+# gemacht werden.
+#
+# Diese Compose-Datei startet BEWUSST KEINEN eigenen Caddy-Container — Caddy
+# läuft bereits als Teil des brain-cockpit-Stacks auf Port 80/443. Siehe
+# deploy/Caddyfile für den Routen-Snippet, der in den gemeinsamen Caddyfile
+# des Servers eingetragen werden muss.
+
+services:
+  erfassung:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+        NEXT_PUBLIC_BASE_PATH: ${NEXT_PUBLIC_BASE_PATH:-/erfassung}
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL}
+      NEXT_PUBLIC_BASE_PATH: ${NEXT_PUBLIC_BASE_PATH:-/erfassung}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      ADMIN_TOKEN: ${ADMIN_TOKEN}
+      APP_USERNAME: ${APP_USERNAME}
+      APP_PIN: ${APP_PIN}
+      AUTH_DISABLED: ${AUTH_DISABLED:-false}
+      # --- Google Drive: OPTIONAL. Fehlen diese, läuft die App normal weiter
+      # (Fotos bleiben in Supabase Storage, kein 'drive_error') — siehe
+      # lib/google/auth.ts isDriveConfigured(). ---
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI}
+      GOOGLE_OAUTH_TOKENS: ${GOOGLE_OAUTH_TOKENS}
+      GOOGLE_SERVICE_ACCOUNT_JSON: ${GOOGLE_SERVICE_ACCOUNT_JSON}
+      GOOGLE_DRIVE_FOLDER_ID: ${GOOGLE_DRIVE_FOLDER_ID}
+      GOOGLE_SHEET_ID: ${GOOGLE_SHEET_ID}
+      GOOGLE_SHEET_NAME: ${GOOGLE_SHEET_NAME}
+    expose:
+      - "3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/erfassung/api/health > /dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - default
+      - shared-edge
+
+networks:
+  shared-edge:
+    external: true

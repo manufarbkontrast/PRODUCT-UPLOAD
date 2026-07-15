@@ -274,6 +274,23 @@ export async function getDriveClient() {
 }
 
 /**
+ * Whether ANY Google Drive credential source is configured (Service Account
+ * via env var or local file, or OAuth2 via GOOGLE_CLIENT_ID/SECRET).
+ *
+ * Used to make the Drive upload step OPTIONAL: on first deploy (or whenever
+ * no GOOGLE_* credentials are set), the process/upload pipeline must skip
+ * the Drive step cleanly instead of failing with `status='drive_error'` —
+ * photos already live safely in Supabase Storage regardless of Drive.
+ */
+export function isDriveConfigured(): boolean {
+  return !!(
+    loadServiceAccountFromEnv() ||
+    serviceAccountFileExists() ||
+    isOAuth2Configured()
+  );
+}
+
+/**
  * Get authentication status.
  */
 export function getAuthStatus(): {

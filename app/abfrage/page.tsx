@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import EanScanner from '@/components/EanScanner';
 import ReorderButton from '@/components/ReorderButton';
 import type { EanLookupResult } from '@/config/ean-lookup-mappings';
+import { withBasePath } from '@/lib/base-path';
 
 interface InventoryLevel {
   readonly locationName: string;
@@ -98,7 +99,7 @@ export default function AbfragePage() {
     const fetchData = async () => {
       try {
         // JTL Daten abfragen (kanonischer Pfad: Supabase statt Google-Drive-Cache)
-        const jtlRes = await fetch('/api/jtl-lookup', {
+        const jtlRes = await fetch(withBasePath('/api/jtl-lookup'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ ean: scannedEan }),

@@ -16,6 +16,7 @@ export {
   loadSavedTokens,
   isOAuth2Ready,
   getAuthStatus,
+  isDriveConfigured,
 } from './auth';
 
 export {

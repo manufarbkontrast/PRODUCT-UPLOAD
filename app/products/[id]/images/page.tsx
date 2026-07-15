@@ -9,6 +9,7 @@ import GuidedPhotoCapture from '@/components/GuidedPhotoCapture';
 import { ShoeViewBadge, MissingViewsBar, ShoeViewOverview } from '@/components/ShoeViewIndicator';
 import { isShoeCategory } from '@/config/shoe-views';
 import { IMAGE_POLL_INTERVAL_MS } from '@/config/constants';
+import { withBasePath } from '@/lib/base-path';
 
 interface ProductImage {
   id: string;
@@ -66,7 +67,7 @@ export default function ProductImagesPage({
 
   const fetchProduct = useCallback(async () => {
     try {
-      const res = await fetch(`/api/products/${id}`);
+      const res = await fetch(withBasePath(`/api/products/${id}`));
       if (!res.ok) throw new Error('Produkt nicht gefunden');
       const data = await res.json();
       setProduct(data);
@@ -118,7 +119,7 @@ export default function ProductImagesPage({
     const triggerUpload = async () => {
       try {
         console.log('[Images] Processing done, triggering separate Drive upload...');
-        const res = await fetch(`/api/products/${id}/upload`, { method: 'POST' });
+        const res = await fetch(withBasePath(`/api/products/${id}/upload`), { method: 'POST' });
         if (!res.ok) {
           const data = await res.json();
           const msg = data.details || data.error || 'Drive-Upload fehlgeschlagen';
@@ -144,7 +145,7 @@ export default function ProductImagesPage({
     setError(null);
 
     try {
-      const res = await fetch(`/api/products/${id}/process`, {
+      const res = await fetch(withBasePath(`/api/products/${id}/process`), {
         method: 'POST',
       });
 
@@ -167,7 +168,7 @@ export default function ProductImagesPage({
     setError(null);
 
     try {
-      const res = await fetch(`/api/products/${id}/upload`, {
+      const res = await fetch(withBasePath(`/api/products/${id}/upload`), {
         method: 'POST',
       });
 
@@ -190,7 +191,7 @@ export default function ProductImagesPage({
     setError(null);
 
     try {
-      const res = await fetch(`/api/products/${id}`, { method: 'DELETE' });
+      const res = await fetch(withBasePath(`/api/products/${id}`), { method: 'DELETE' });
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.error || 'Löschen fehlgeschlagen');
@@ -207,7 +208,7 @@ export default function ProductImagesPage({
     setClassifying(true);
     setError(null);
     try {
-      const res = await fetch(`/api/products/${id}/classify`, { method: 'POST' });
+      const res = await fetch(withBasePath(`/api/products/${id}/classify`), { method: 'POST' });
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.error || 'Klassifizierung fehlgeschlagen');
@@ -228,7 +229,7 @@ export default function ProductImagesPage({
     if (!confirm('Bild wirklich löschen?')) return;
 
     try {
-      const res = await fetch(`/api/products/${id}/images/${imageId}`, {
+      const res = await fetch(withBasePath(`/api/products/${id}/images/${imageId}`), {
         method: 'DELETE',
       });
 
