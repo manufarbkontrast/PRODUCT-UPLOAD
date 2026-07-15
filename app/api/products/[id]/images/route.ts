@@ -3,6 +3,7 @@ import { createServiceRoleClient } from '@/lib/supabase/server';
 import { requireUser } from '@/lib/auth/require-user';
 import { validateImageSize, validateImageMagicBytes } from '@/lib/validation/image';
 import { extractStoragePath } from '@/lib/supabase/storage-path';
+import { parseSortOrder } from '@/lib/sort-order';
 
 export async function POST(
   request: NextRequest,
@@ -38,12 +39,11 @@ export async function POST(
     const rawSortOrder = formData.get('sortOrder');
     let explicitSortOrder: number | null = null;
     if (typeof rawSortOrder === 'string' && rawSortOrder.trim() !== '') {
-      const parsed = Number(rawSortOrder);
-      if (Number.isInteger(parsed) && parsed >= 0) {
-        explicitSortOrder = parsed;
-      } else {
+      const parsed = parseSortOrder(Number(rawSortOrder));
+      if (parsed === null) {
         return NextResponse.json({ error: 'Ungueltiger sortOrder-Wert' }, { status: 400 });
       }
+      explicitSortOrder = parsed;
     }
 
     if (!file) {

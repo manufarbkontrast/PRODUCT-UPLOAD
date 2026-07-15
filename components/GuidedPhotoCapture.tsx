@@ -61,15 +61,29 @@ export default function GuidedPhotoCapture({
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [processTriggered, setProcessTriggered] = useState(false);
+  const [processError, setProcessError] = useState<string | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
+  // Bleibt waehrend der gesamten Lebensdauer der Komponente `true`, wird im
+  // Unmount-Cleanup auf `false` gesetzt. Zusammen mit `requestIdRef` verhindert
+  // das den Kamera-Leak: `getUserMedia()` kann waehrend eines haengenden
+  // Berechtigungs-Dialogs lange auf sich warten lassen — laeuft der Nutzer in
+  // der Zwischenzeit weg (Unmount) oder verlaesst die Aufnahme-Phase, darf der
+  // erst danach aufgeloeste Stream NICHT mehr angehaengt werden, sondern muss
+  // sofort wieder gestoppt werden (sonst bleibt die Kamera-LED dauerhaft an).
+  const mountedRef = useRef(true);
+  const requestIdRef = useRef(0);
+
   const view = currentView(state, views);
   const complete = isComplete(state, views);
 
   const stopCamera = useCallback(() => {
+    // Jeder laufende (noch nicht aufgeloeste) openLiveCamera()-Aufruf wird
+    // hierdurch als veraltet markiert, siehe Guard in openLiveCamera().
+    requestIdRef.current += 1;
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
@@ -79,6 +93,7 @@ export default function GuidedPhotoCapture({
 
   const openLiveCamera = useCallback(async () => {
     setCameraErrorType(null);
+    const requestId = requestIdRef.current;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
@@ -88,6 +103,15 @@ export default function GuidedPhotoCapture({
         },
       });
 
+      // Guard gegen den Kamera-Leak: Komponente unmounted oder Aufnahme-Phase
+      // verlassen (stopCamera() hat requestIdRef erhoeht), waehrend der
+      // Berechtigungs-Dialog noch offen war. Der Stream ist dann veraltet —
+      // sofort stoppen und NICHT an streamRef/video haengen.
+      if (!mountedRef.current || requestIdRef.current !== requestId) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+
       streamRef.current = stream;
 
       if (videoRef.current) {
@@ -96,8 +120,18 @@ export default function GuidedPhotoCapture({
         setCameraActive(true);
       }
     } catch (err) {
-      setCameraErrorType(classifyCameraError(err));
+      if (mountedRef.current && requestIdRef.current === requestId) {
+        setCameraErrorType(classifyCameraError(err));
+      }
     }
+  }, []);
+
+  // Mount/Unmount-Tracking fuer den Guard in openLiveCamera().
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -118,9 +152,19 @@ export default function GuidedPhotoCapture({
 
     const triggerProcess = async () => {
       try {
-        await fetch(`/api/products/${productId}/process`, { method: 'POST' });
+        const res = await fetch(`/api/products/${productId}/process`, { method: 'POST' });
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || 'Fehler beim Starten der Verarbeitung');
+        }
       } catch (err) {
+        // Konsistent mit handleProcessImages (app/products/[id]/images/page.tsx):
+        // bei Fehlschlag NICHT "Verarbeitung gestartet" behaupten, sondern den
+        // Fehler sichtbar machen.
+        const msg = err instanceof Error ? err.message : 'Fehler beim Starten der Verarbeitung';
         console.error('[GuidedPhotoCapture] Verarbeitung konnte nicht gestartet werden:', err);
+        setProcessError(msg);
       } finally {
         onUploadComplete?.();
         onAllCaptured?.();
@@ -226,7 +270,11 @@ export default function GuidedPhotoCapture({
           <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
             Alle 4 Ansichten aufgenommen
           </p>
-          <p className="text-xs text-zinc-500 mt-1">Verarbeitung wurde gestartet...</p>
+          {processError ? (
+            <p className="text-sm text-red-600 mt-1">{processError}</p>
+          ) : (
+            <p className="text-xs text-zinc-500 mt-1">Verarbeitung wurde gestartet...</p>
+          )}
         </div>
 
         <ShoeViewOverview
