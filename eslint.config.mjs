@@ -12,7 +12,17 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Archivierter, unreferenzierter Deadcode — nicht Teil der App, nicht linten.
+    "_archive/**",
   ]),
+  {
+    // Test-Mocks dürfen `any` nutzen (partielle Fremdtypen wie SupabaseClient
+    // vollständig nachzubauen bringt keinen Testwert).
+    files: ["**/*.test.ts", "**/*.test.tsx", "__tests__/**"],
+    rules: {
+      "@typescript-eslint/no-explicit-any": "off",
+    },
+  },
 ]);
 
 export default eslintConfig;

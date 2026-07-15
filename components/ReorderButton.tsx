@@ -52,12 +52,17 @@ export default function ReorderButton({
   const skuList = useMemo(() => variants.map((v) => v.sku).join(','), [variants]);
 
   useEffect(() => {
+    // Bei leerer Variantenliste rendert die Komponente ohnehin null (siehe
+    // unten) — kein Fetch, kein State-Update nötig.
     if (variants.length === 0) {
-      setPhase('idle');
       return;
     }
     let cancelled = false;
-    setPhase('loading-locks');
+    // Ladezustand wird im Microtask gesetzt (nicht synchron im Effect-Body),
+    // damit kein kaskadierendes Re-Render ausgelöst wird (react-hooks).
+    queueMicrotask(() => {
+      if (!cancelled) setPhase('loading-locks');
+    });
     fetch(withBasePath(`/api/reorder?skus=${encodeURIComponent(skuList)}`))
       .then((r) => r.json())
       .then((data) => {

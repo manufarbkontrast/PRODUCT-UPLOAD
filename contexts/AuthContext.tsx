@@ -5,7 +5,6 @@ import {
   useContext,
   useState,
   useEffect,
-  useRef,
   ReactNode,
   useCallback,
 } from 'react';
@@ -29,15 +28,18 @@ const AuthContext = createContext<AuthContextType>({
 });
 
 function useSupabaseClient(): SupabaseClient | null {
-  const ref = useRef<SupabaseClient | null>(null);
-  if (ref.current === null) {
+  // Lazy-Init über useState statt Ref: erzeugt den Client genau einmal
+  // (Initializer läuft nur beim ersten Render) und greift NICHT während des
+  // Renders auf ref.current zu (react-hooks/refs).
+  const [client] = useState<SupabaseClient | null>(() => {
     try {
-      ref.current = createClient();
+      return createClient();
     } catch {
       // Env vars missing (e.g. during static build) — client unavailable.
+      return null;
     }
-  }
-  return ref.current;
+  });
+  return client;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
