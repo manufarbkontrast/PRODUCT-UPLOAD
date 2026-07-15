@@ -11,15 +11,20 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@base-ui/react": "^1.6.0",
     "@google/generative-ai": "^0.24.0",
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.93.3",
     "barcode-detector": "^3.1.2",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
     "googleapis": "^170.1.0",
+    "lucide-react": "^1.24.0",
     "next": "^16.1.6",
     "react": "19.2.0",
     "react-dom": "19.2.0",
-    "sharp": "^0.34.5"
+    "sharp": "^0.34.5",
+    "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

@@ -99,7 +99,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={!email.trim() || !password.trim() || loading}
-            className="w-full py-3.5 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-xl text-base font-medium disabled:opacity-30 transition-opacity flex items-center justify-center gap-2"
+            className="w-full py-3.5 bg-primary text-primary-foreground rounded-xl text-base font-medium disabled:opacity-30 transition-opacity flex items-center justify-center gap-2"
           >
             {loading ? (
               <svg className="w-5 h-5 animate-spin" viewBox="0 0 24 24">
