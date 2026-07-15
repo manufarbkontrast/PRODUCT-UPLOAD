@@ -15,7 +15,7 @@ export function ShoeViewBadge({ sortOrder, isShoe }: ShoeViewBadgeProps) {
   if (!view) return null;
 
   return (
-    <span className="text-xs px-2 py-0.5 rounded bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">
+    <span className="text-xs px-2 py-0.5 rounded bg-indigo-900/40 text-indigo-300">
       {view.label}
     </span>
   );
@@ -29,7 +29,7 @@ interface MissingViewsBarProps {
 export function MissingViewsBar({ missingLabels }: MissingViewsBarProps) {
   if (missingLabels.length === 0) {
     return (
-      <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg px-3 py-2">
+      <div className="flex items-center gap-2 text-sm text-green-400 bg-green-900/20 border border-green-800 rounded-lg px-3 py-2">
         <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
         </svg>
@@ -39,8 +39,8 @@ export function MissingViewsBar({ missingLabels }: MissingViewsBarProps) {
   }
 
   return (
-    <div className="text-sm bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2 space-y-1">
-      <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 font-medium">
+    <div className="text-sm bg-amber-900/20 border border-amber-800 rounded-lg px-3 py-2 space-y-1">
+      <div className="flex items-center gap-2 text-amber-400 font-medium">
         <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
         </svg>
@@ -50,7 +50,7 @@ export function MissingViewsBar({ missingLabels }: MissingViewsBarProps) {
         {missingLabels.map((label) => (
           <span
             key={label}
-            className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+            className="text-xs px-2 py-0.5 rounded bg-amber-900/40 text-amber-300"
           >
             {label}
           </span>
@@ -77,8 +77,8 @@ export function ShoeViewOverview({ images }: ShoeViewOverviewProps) {
             key={view.key}
             className={`text-center py-1.5 px-1 rounded text-xs ${
               present
-                ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400'
-                : 'bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500'
+                ? 'bg-green-900/20 text-green-400'
+                : 'bg-muted text-muted-foreground'
             }`}
           >
             <div className="font-medium truncate">{view.label}</div>

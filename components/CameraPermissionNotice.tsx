@@ -33,9 +33,9 @@ export default function CameraPermissionNotice({ type }: CameraPermissionNoticeP
   const content = NOTICE_CONTENT[type];
 
   return (
-    <div className="p-3 rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800/60 dark:bg-amber-900/20">
-      <p className="text-sm font-medium text-amber-800 dark:text-amber-300">{content.title}</p>
-      <ol className="mt-1.5 space-y-1 text-xs text-amber-700 dark:text-amber-400 list-decimal list-inside">
+    <div className="p-3 rounded-lg border border-amber-800/60 bg-amber-900/20">
+      <p className="text-sm font-medium text-amber-300">{content.title}</p>
+      <ol className="mt-1.5 space-y-1 text-xs text-amber-400 list-decimal list-inside">
         {content.steps.map((step) => (
           <li key={step}>{step}</li>
         ))}

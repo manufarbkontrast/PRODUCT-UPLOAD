@@ -19,22 +19,22 @@ export default function ImagesErrorPage({ error, reset }: ErrorPageProps) {
     <div className="flex min-h-screen flex-col items-center justify-center p-6">
       <div className="max-w-md w-full text-center space-y-4">
         <div className="text-4xl">📷</div>
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+        <h2 className="text-xl font-extrabold text-foreground">
           Fehler bei der Bildverarbeitung
         </h2>
-        <p className="text-gray-600 dark:text-gray-400">
+        <p className="text-muted-foreground">
           Beim Laden oder Verarbeiten der Bilder ist ein Fehler aufgetreten.
         </p>
         <div className="flex gap-3 justify-center mt-4">
           <button
             onClick={reset}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="px-6 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/80 transition-colors"
           >
             Erneut versuchen
           </button>
           <button
             onClick={() => router.push('/')}
-            className="px-6 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600 transition-colors"
+            className="px-6 py-2 bg-muted text-foreground rounded-lg hover:bg-muted/70 transition-colors"
           >
             Zur Startseite
           </button>

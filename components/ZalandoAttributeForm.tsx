@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Input, Select, Textarea } from '@/components/ui';
+import { Select, Textarea } from '@/components/ui';
+import { Input } from '@/components/ui/shadcn/input';
 import {
   getSilhouetteByKey,
   type ZalandoAttribute,
@@ -65,6 +66,47 @@ const ATTRIBUTE_GROUPS: readonly AttributeGroup[] = [
     ],
   },
 ];
+
+// ─── Input mit Label/Fehler (shadcn Input hat keinen eingebauten Wrapper) ───
+
+function LabeledInput({
+  name,
+  label,
+  type,
+  placeholder,
+  value,
+  onChange,
+  error,
+  autoComplete,
+}: {
+  readonly name: string;
+  readonly label: string;
+  readonly type?: string;
+  readonly placeholder?: string;
+  readonly value: string;
+  readonly onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  readonly error?: string;
+  readonly autoComplete?: string;
+}) {
+  return (
+    <div className="w-full">
+      <label htmlFor={name} className="block text-sm font-medium mb-1 text-muted-foreground">
+        {label}
+      </label>
+      <Input
+        id={name}
+        name={name}
+        type={type}
+        placeholder={placeholder}
+        value={value}
+        onChange={onChange}
+        autoComplete={autoComplete}
+        aria-invalid={!!error}
+      />
+      {error && <p className="mt-1 text-sm text-destructive">{error}</p>}
+    </div>
+  );
+}
 
 // ─── Einzelnes Feld ─────────────────────────────────────────────────────────
 
@@ -154,7 +196,7 @@ function AttributeField({
 
   if (attr.type === 'number') {
     return (
-      <Input
+      <LabeledInput
         name={attr.key}
         label={label}
         type="number"
@@ -168,7 +210,7 @@ function AttributeField({
   }
 
   return (
-    <Input
+    <LabeledInput
       name={attr.key}
       label={label}
       placeholder={placeholder}
@@ -204,27 +246,27 @@ function AttributeCard({
   ).length;
 
   return (
-    <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 overflow-hidden">
+    <div className="rounded-xl border border-border overflow-hidden">
       <button
         type="button"
         onClick={() => setExpanded(prev => !prev)}
-        className="flex items-center justify-between w-full px-4 py-3 bg-zinc-50 dark:bg-zinc-800/50 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+        className="flex items-center justify-between w-full px-4 py-3 bg-muted/50 hover:bg-muted transition-colors"
       >
         <div className="flex items-center gap-2.5">
           <span className="text-base">{group.icon}</span>
-          <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+          <span className="text-sm font-medium text-foreground">
             {group.label}
           </span>
-          <span className="flex items-center justify-center w-4 h-4 rounded-full bg-red-100 text-red-600 text-[10px] font-bold dark:bg-red-900/30 dark:text-red-400">
+          <span className="flex items-center justify-center w-4 h-4 rounded-full bg-destructive/10 text-destructive text-[10px] font-bold">
             !
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-zinc-400 dark:text-zinc-500">
+          <span className="text-xs text-muted-foreground">
             {filledCount}/{attrs.length}
           </span>
           <svg
-            className={`w-4 h-4 text-zinc-400 transition-transform ${expanded ? 'rotate-180' : ''}`}
+            className={`w-4 h-4 text-muted-foreground transition-transform ${expanded ? 'rotate-180' : ''}`}
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"

@@ -246,12 +246,12 @@ export default function GuidedPhotoCapture({
   if (views.length === 0 && !complete) {
     return (
       <div className="space-y-4 text-center py-6">
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+        <p className="text-sm text-muted-foreground">
           Alle {SHOE_VIEWS.length} Standardansichten sind bereits vorhanden.
         </p>
         <button
           onClick={onCancel}
-          className="w-full min-h-11 flex items-center justify-center py-3 px-4 border border-zinc-300 dark:border-zinc-700 rounded-lg text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-900"
+          className="w-full min-h-11 flex items-center justify-center py-3 px-4 border border-input rounded-lg text-sm font-medium hover:bg-muted"
         >
           Zurück
         </button>
@@ -263,18 +263,18 @@ export default function GuidedPhotoCapture({
     return (
       <div className="space-y-4">
         <div className="text-center py-4">
-          <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-green-50 dark:bg-green-900/20 flex items-center justify-center">
+          <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-green-900/20 flex items-center justify-center">
             <svg className="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+          <p className="text-sm font-medium text-foreground">
             Alle 4 Ansichten aufgenommen
           </p>
           {processError ? (
             <p className="text-sm text-red-600 mt-1">{processError}</p>
           ) : (
-            <p className="text-xs text-zinc-500 mt-1">Verarbeitung wurde gestartet...</p>
+            <p className="text-xs text-muted-foreground mt-1">Verarbeitung wurde gestartet...</p>
           )}
         </div>
 
@@ -284,7 +284,7 @@ export default function GuidedPhotoCapture({
 
         <button
           onClick={onCancel}
-          className="w-full min-h-11 flex items-center justify-center py-3 px-4 bg-zinc-900 text-white rounded-lg text-sm font-medium dark:bg-white dark:text-zinc-900"
+          className="w-full min-h-11 flex items-center justify-center py-3 px-4 bg-primary text-primary-foreground rounded-lg text-sm font-medium"
         >
           Fertig
         </button>
@@ -307,12 +307,12 @@ export default function GuidedPhotoCapture({
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <p className="text-sm font-medium text-zinc-900 dark:text-white">
+        <p className="text-sm font-medium text-foreground">
           Foto {photoNumber} von {SHOE_VIEWS.length}
         </p>
         <button
           onClick={onCancel}
-          className="text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 min-h-11 px-2"
+          className="text-xs text-muted-foreground hover:text-foreground min-h-11 px-2"
         >
           Abbrechen
         </button>
@@ -321,18 +321,18 @@ export default function GuidedPhotoCapture({
       {/* Step A: Anleitung */}
       {state.phase === 'anleitung' && (
         <div className="space-y-4 text-center">
-          <div className="bg-zinc-50 dark:bg-zinc-800/50 rounded-xl p-4">
+          <div className="bg-muted/50 rounded-xl p-4">
             <img
               src={withBasePath(view.piktogramm)}
               alt={view.label}
               className="w-full max-w-[280px] mx-auto"
             />
           </div>
-          <p className="text-sm font-medium text-zinc-900 dark:text-white">{view.label}</p>
-          <p className="text-sm text-zinc-600 dark:text-zinc-400">{view.anweisung}</p>
+          <p className="text-sm font-medium text-foreground">{view.label}</p>
+          <p className="text-sm text-muted-foreground">{view.anweisung}</p>
           <button
             onClick={() => setState((prev) => openCameraStep(prev))}
-            className="w-full min-h-11 flex items-center justify-center gap-2 py-3 px-4 bg-zinc-900 text-white rounded-lg text-sm font-medium dark:bg-white dark:text-zinc-900"
+            className="w-full min-h-11 flex items-center justify-center gap-2 py-3 px-4 bg-primary text-primary-foreground rounded-lg text-sm font-medium"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
@@ -351,7 +351,7 @@ export default function GuidedPhotoCapture({
               <CameraPermissionNotice type={cameraErrorType} />
               <button
                 onClick={() => setState((prev) => backToInstructions(prev))}
-                className="w-full min-h-11 flex items-center justify-center py-3 px-4 border border-zinc-300 dark:border-zinc-700 rounded-lg text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-900"
+                className="w-full min-h-11 flex items-center justify-center py-3 px-4 border border-input rounded-lg text-sm font-medium hover:bg-muted"
               >
                 Zurück zur Anleitung
               </button>
@@ -375,14 +375,14 @@ export default function GuidedPhotoCapture({
                 />
               </div>
 
-              <p className="text-xs text-zinc-500 text-center">{view.anweisung}</p>
+              <p className="text-xs text-muted-foreground text-center">{view.anweisung}</p>
 
               <div className="flex justify-center pb-[env(safe-area-inset-bottom)]">
                 <button
                   onClick={handleCapture}
                   disabled={!cameraActive}
                   aria-label="Foto aufnehmen"
-                  className="w-16 h-16 rounded-full border-4 border-white bg-zinc-900 dark:bg-white disabled:opacity-40 shadow-lg"
+                  className="w-16 h-16 rounded-full border-4 border-white bg-white disabled:opacity-40 shadow-lg"
                 />
               </div>
             </>
@@ -412,7 +412,7 @@ export default function GuidedPhotoCapture({
             <button
               onClick={handleRetake}
               disabled={uploading}
-              className="flex-1 min-h-11 flex items-center justify-center py-2.5 text-sm border border-zinc-300 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-900 disabled:opacity-50"
+              className="flex-1 min-h-11 flex items-center justify-center py-2.5 text-sm border border-input rounded-lg hover:bg-muted disabled:opacity-50"
             >
               Wiederholen
             </button>

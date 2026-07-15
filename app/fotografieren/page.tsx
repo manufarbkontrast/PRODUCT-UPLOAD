@@ -18,13 +18,13 @@ interface RecentProduct {
 }
 
 const STATUS_CONFIG: Record<string, { readonly label: string; readonly color: string }> = {
-  draft: { label: 'Entwurf', color: 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400' },
-  processing: { label: 'Verarbeitung...', color: 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400' },
-  processed: { label: 'Verarbeitet', color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' },
-  uploading: { label: 'Upload...', color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' },
-  uploaded: { label: 'Fertig', color: 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' },
-  error: { label: 'Fehler', color: 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400' },
-  drive_error: { label: 'Drive-Fehler', color: 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400' },
+  draft: { label: 'Entwurf', color: 'bg-muted text-muted-foreground' },
+  processing: { label: 'Verarbeitung...', color: 'bg-blue-900/30 text-blue-400' },
+  processed: { label: 'Verarbeitet', color: 'bg-yellow-900/30 text-yellow-400' },
+  uploading: { label: 'Upload...', color: 'bg-yellow-900/30 text-yellow-400' },
+  uploaded: { label: 'Fertig', color: 'bg-green-900/30 text-green-400' },
+  error: { label: 'Fehler', color: 'bg-destructive/20 text-destructive' },
+  drive_error: { label: 'Drive-Fehler', color: 'bg-destructive/20 text-destructive' },
 };
 
 export default function FotografierenPage() {
@@ -129,23 +129,23 @@ export default function FotografierenPage() {
   }, [scannedEan, lookupDone, lookupData, creating, router]);
 
   const getStatusInfo = (status: string) => {
-    return STATUS_CONFIG[status] ?? { label: status, color: 'bg-zinc-100 text-zinc-600' };
+    return STATUS_CONFIG[status] ?? { label: status, color: 'bg-muted text-muted-foreground' };
   };
 
   if (creating) {
     return (
       <div className="space-y-6">
         <div className="text-center py-12">
-          <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
-            <svg className="w-7 h-7 text-zinc-500 animate-spin" viewBox="0 0 24 24">
+          <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-muted flex items-center justify-center">
+            <svg className="w-7 h-7 text-muted-foreground animate-spin" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
             </svg>
           </div>
-          <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+          <p className="text-sm font-medium text-foreground">
             Produkt wird erstellt...
           </p>
-          <p className="text-xs text-zinc-500 mt-1">
+          <p className="text-xs text-muted-foreground mt-1">
             Weiterleitung zur Bildaufnahme
           </p>
         </div>
@@ -158,7 +158,7 @@ export default function FotografierenPage() {
       <div className="flex items-center gap-3 mb-2">
         <button
           onClick={() => router.push('/')}
-          className="p-2 -ml-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+          className="p-2 -ml-2 rounded-lg hover:bg-muted transition-colors"
           aria-label="Zurueck"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -175,14 +175,14 @@ export default function FotografierenPage() {
       />
 
       {error && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 dark:bg-red-900/20 dark:border-red-800 dark:text-red-400">
+        <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-lg text-sm text-destructive">
           {error}
         </div>
       )}
 
       {recentProducts.length > 0 && (
         <div>
-          <h2 className="text-sm font-medium text-zinc-500 mb-3">Letzte Produkte</h2>
+          <h2 className="text-sm font-medium text-muted-foreground mb-3">Letzte Produkte</h2>
           <div className="space-y-2">
             {recentProducts.map((product) => {
               const statusInfo = getStatusInfo(product.status);
@@ -190,11 +190,11 @@ export default function FotografierenPage() {
                 <button
                   key={product.id}
                   onClick={() => router.push(`/products/${product.id}/images`)}
-                  className="flex items-center justify-between w-full p-3 border border-zinc-200 rounded-lg hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900 text-left transition-colors"
+                  className="flex items-center justify-between w-full p-3 border border-border rounded-lg hover:bg-muted text-left transition-colors"
                 >
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium truncate">{product.name}</p>
-                    <p className="text-xs text-zinc-500 mt-0.5">
+                    <p className="text-xs text-muted-foreground mt-0.5">
                       {product.ean ?? 'Ohne EAN'} · {product.images.length} Bild{product.images.length !== 1 ? 'er' : ''}
                     </p>
                   </div>
@@ -208,7 +208,7 @@ export default function FotografierenPage() {
                         target="_blank"
                         rel="noopener noreferrer"
                         onClick={(e) => e.stopPropagation()}
-                        className="text-xs text-blue-600 hover:underline dark:text-blue-400"
+                        className="text-xs text-blue-400 hover:underline"
                       >
                         Drive
                       </a>

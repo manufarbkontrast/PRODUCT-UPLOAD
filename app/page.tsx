@@ -32,10 +32,10 @@ export default function Home() {
   const router = useRouter();
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div className="text-center pt-4">
-        <h1 className="text-2xl font-semibold">Was moechtest du tun?</h1>
-        <p className="text-sm text-zinc-500 mt-1">Waehle eine Option</p>
+        <h1 className="text-2xl font-extrabold">Was moechtest du tun?</h1>
+        <p className="text-sm text-muted-foreground mt-1">Waehle eine Option</p>
       </div>
 
       <div className="grid gap-4">
@@ -43,14 +43,14 @@ export default function Home() {
           <button
             key={mode.id}
             onClick={() => router.push(mode.href)}
-            className="flex items-center gap-5 w-full p-5 border border-zinc-200 dark:border-zinc-800 rounded-2xl hover:bg-zinc-50 dark:hover:bg-zinc-900 text-left transition-colors"
+            className="flex items-center gap-5 w-full p-5 border border-border bg-card rounded-2xl hover:bg-muted text-left transition-colors"
           >
-            <div className="w-14 h-14 rounded-xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center flex-shrink-0 text-zinc-600 dark:text-zinc-400">
+            <div className="w-14 h-14 rounded-xl bg-muted flex items-center justify-center flex-shrink-0 text-muted-foreground">
               {mode.icon}
             </div>
             <div>
               <p className="text-base font-semibold">{mode.title}</p>
-              <p className="text-sm text-zinc-500 mt-0.5">{mode.description}</p>
+              <p className="text-sm text-muted-foreground mt-0.5">{mode.description}</p>
             </div>
           </button>
         ))}

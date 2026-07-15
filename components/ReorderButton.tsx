@@ -153,20 +153,20 @@ export default function ReorderButton({
     !!brand;
 
   return (
-    <div className="border border-zinc-200 dark:border-zinc-800 rounded-xl p-4 space-y-3">
+    <div className="border border-border rounded-xl p-4 space-y-3">
       <div className="flex items-center justify-between">
         <p className="text-sm font-medium">Nachbestellung</p>
         {phase === 'loading-locks' && (
-          <span className="text-xs text-zinc-500">Prüfe Status…</span>
+          <span className="text-xs text-muted-foreground">Prüfe Status…</span>
         )}
       </div>
 
       <label className="block">
-        <span className="text-xs text-zinc-500">Marke</span>
+        <span className="text-xs text-muted-foreground">Marke</span>
         <select
           value={brand}
           onChange={(e) => setBrand(e.target.value)}
-          className="mt-1 w-full px-3 py-2 text-sm border border-zinc-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-900"
+          className="mt-1 w-full px-3 py-2 text-sm border border-input rounded-lg bg-transparent"
         >
           <option value="">— Marke wählen —</option>
           {BRAND_OPTIONS.map((b) => (
@@ -178,8 +178,8 @@ export default function ReorderButton({
       </label>
 
       <div className="space-y-1.5">
-        <p className="text-xs text-zinc-500">Größen auswählen</p>
-        <ul className="divide-y divide-zinc-100 dark:divide-zinc-800 border border-zinc-200 dark:border-zinc-800 rounded-lg">
+        <p className="text-xs text-muted-foreground">Größen auswählen</p>
+        <ul className="divide-y divide-border border border-border rounded-lg">
           {variants.map((v) => {
             const lock = locks[v.sku];
             const checked = selectedSkus.has(v.sku);
@@ -198,23 +198,23 @@ export default function ReorderButton({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium">{v.size || '—'}</span>
-                    <span className="text-xs text-zinc-500 truncate">{v.sku}</span>
+                    <span className="text-xs text-muted-foreground truncate">{v.sku}</span>
                   </div>
                   {lock?.locked && !done && (
-                    <p className="text-xs text-red-600 dark:text-red-400">
+                    <p className="text-xs text-red-400">
                       Gesperrt von {lock.filiale}
                     </p>
                   )}
                   {done?.ok && (
-                    <p className="text-xs text-green-700 dark:text-green-400">Gebucht</p>
+                    <p className="text-xs text-green-400">Gebucht</p>
                   )}
                   {done && !done.ok && 'locked' in done && (
-                    <p className="text-xs text-red-600 dark:text-red-400">
+                    <p className="text-xs text-red-400">
                       Zwischenzeitlich gesperrt von {done.filiale}
                     </p>
                   )}
                   {done && !done.ok && 'error' in done && (
-                    <p className="text-xs text-red-600 dark:text-red-400">{done.error}</p>
+                    <p className="text-xs text-red-400">{done.error}</p>
                   )}
                 </div>
                 <input
@@ -223,7 +223,7 @@ export default function ReorderButton({
                   value={quantities[v.sku] ?? '1'}
                   onChange={(e) => setQty(v.sku, e.target.value)}
                   disabled={disabled || !checked}
-                  className="w-14 px-2 py-1 text-sm border border-zinc-300 dark:border-zinc-700 rounded-md bg-white dark:bg-zinc-900 disabled:opacity-40"
+                  className="w-14 px-2 py-1 text-sm border border-input rounded-md bg-transparent disabled:opacity-40"
                 />
               </li>
             );
@@ -232,25 +232,25 @@ export default function ReorderButton({
       </div>
 
       <label className="block">
-        <span className="text-xs text-zinc-500">Notiz (optional, für alle Zeilen)</span>
+        <span className="text-xs text-muted-foreground">Notiz (optional, für alle Zeilen)</span>
         <input
           type="text"
           value={note}
           onChange={(e) => setNote(e.target.value)}
           disabled={phase === 'submitting' || phase === 'done'}
-          className="mt-1 w-full px-3 py-2 text-sm border border-zinc-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-900 disabled:opacity-40"
+          className="mt-1 w-full px-3 py-2 text-sm border border-input rounded-lg bg-transparent disabled:opacity-40"
         />
       </label>
 
       {submitError && (
-        <p className="text-xs text-red-600 dark:text-red-400">{submitError}</p>
+        <p className="text-xs text-red-400">{submitError}</p>
       )}
 
       {phase !== 'done' ? (
         <button
           onClick={submit}
           disabled={!canSubmit}
-          className="w-full py-2.5 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-lg text-sm font-medium disabled:opacity-50"
+          className="w-full py-2.5 bg-primary text-primary-foreground rounded-lg text-sm font-medium disabled:opacity-50"
         >
           {phase === 'submitting'
             ? 'Wird gebucht…'
@@ -279,21 +279,21 @@ function SummaryLine({
   return (
     <div className="text-sm space-y-1 py-2">
       {ok > 0 && (
-        <p className="text-green-700 dark:text-green-400">
+        <p className="text-green-400">
           ✓ {ok} Zeile{ok !== 1 ? 'n' : ''} gebucht
         </p>
       )}
       {locked > 0 && (
-        <p className="text-red-600 dark:text-red-400">
+        <p className="text-red-400">
           {locked} bereits von anderer Filiale gesperrt
         </p>
       )}
       {errored > 0 && (
-        <p className="text-red-600 dark:text-red-400">
+        <p className="text-red-400">
           {errored} Fehler — nochmal versuchen
         </p>
       )}
-      <p className="text-xs text-zinc-500">
+      <p className="text-xs text-muted-foreground">
         Noch {availableRemaining} Größe{availableRemaining !== 1 ? 'n' : ''} frei.
       </p>
     </div>
