@@ -8,12 +8,12 @@
 # "erfassung"-Container weiterleiten. So ist es auf dem Server eingerichtet
 # (Stand 2026-07-15, live):
 #
-#   1. In JEDEN Host-Block der brain-cockpit/deploy/Caddyfile den benannten
+#   1. In JEDEN Host-Block der mycrafton/deploy/Caddyfile den benannten
 #      Matcher + handle-Block einfügen (sslip.io-Block UND reiner IP-Block).
-#   2. `docker restart deploy-caddy-1` im brain-cockpit-Stack ausführen
+#   2. `docker restart deploy-caddy-1` im mycrafton-Stack ausführen
 #      (NICHT `caddy reload` — siehe STALE-MOUNT-Hinweis unten).
 #
-# Beispiel — ein Host-Block aus brain-cockpit/deploy/Caddyfile NACH der Ergänzung:
+# Beispiel — ein Host-Block aus mycrafton/deploy/Caddyfile NACH der Ergänzung:
 #
 #   167.233.218.238 {
 #   	tls {
@@ -48,7 +48,7 @@
 # `docker restart deploy-caddy-1` — der Container liest die Datei beim Start
 # neu ein. Vorher mit einem Wegwerf-Container validieren, damit der Neustart
 # nicht mit kaputter Config den Cockpit lahmlegt:
-#   docker run --rm -v /opt/brain-cockpit/deploy/Caddyfile:/tmp/C:ro \
+#   docker run --rm -v /opt/mycrafton/deploy/Caddyfile:/tmp/C:ro \
 #     caddy:2-alpine caddy validate --config /tmp/C --adapter caddyfile
 #
 # Hinweis: erfassung- und cockpit-Container teilen sich das Netzwerk

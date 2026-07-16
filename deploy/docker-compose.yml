@@ -2,7 +2,7 @@
 # diese App ("erfassung") neben "brain-cockpit" (Root "/") läuft.
 #
 # WICHTIG — gemeinsames Docker-Netzwerk erforderlich:
-# Der Caddy-Container von brain-cockpit muss diesen Container per Name
+# Der Caddy-Container von mycrafton (ehem. brain-cockpit) muss diesen Container per Name
 # ("erfassung:3000") erreichen können. Da beide Apps EIGENSTÄNDIGE
 # docker-compose-Projekte sind (jedes mit eigenem Standard-Netzwerk), reicht
 # es NICHT, beide auf demselben Host laufen zu lassen — sie müssen ein
@@ -10,7 +10,7 @@
 #
 #   docker network create shared-edge
 #
-# Und im brain-cockpit-Compose (/opt/brain-cockpit/deploy/docker-compose.yml,
+# Und im mycrafton-Compose (/opt/mycrafton/deploy/docker-compose.yml,
 # NICHT Teil dieses Repos) beim "app"- und "caddy"-Service ergänzen:
 #
 #   networks:
@@ -26,7 +26,7 @@
 # gemacht werden.
 #
 # Diese Compose-Datei startet BEWUSST KEINEN eigenen Caddy-Container — Caddy
-# läuft bereits als Teil des brain-cockpit-Stacks auf Port 80/443. Siehe
+# läuft bereits als Teil des mycrafton-Stacks auf Port 80/443. Siehe
 # deploy/Caddyfile für den Routen-Snippet, der in den gemeinsamen Caddyfile
 # des Servers eingetragen werden muss.
 
