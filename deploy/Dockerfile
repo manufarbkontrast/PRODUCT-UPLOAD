@@ -1,7 +1,7 @@
 # Deploy-Dockerfile für den GEMEINSAMEN Hetzner-Host (167.233.218.238), auf dem
-# diese App neben "brain-cockpit" läuft — erreichbar unter dem Pfad "/erfassung"
+# diese App neben "mycrafton" (Cockpit) läuft — erreichbar unter dem Pfad "/erfassung"
 # (siehe next.config.ts: basePath). Struktur bewusst analog zu
-# brain-cockpit/Dockerfile gehalten, damit beide Apps auf dem Server gleich
+# mycrafton/Dockerfile gehalten, damit beide Apps auf dem Server gleich
 # gebaut/betrieben werden.
 #
 # Build-Kontext ist der Repo-Root (siehe deploy/docker-compose.yml: context: ..),

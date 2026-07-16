@@ -3,7 +3,7 @@
 #
 # Diese App läuft NICHT hinter einem eigenen Caddy-Container (siehe
 # deploy/docker-compose.yml). Stattdessen muss der bestehende Caddy von
-# brain-cockpit (der bereits Port 80/443 auf dem gemeinsamen Hetzner-Host
+# mycrafton (der bereits Port 80/443 auf dem gemeinsamen Hetzner-Host
 # 167.233.218.238 bedient) auch die Requests unter "/erfassung" an den
 # "erfassung"-Container weiterleiten. So ist es auf dem Server eingerichtet
 # (Stand 2026-07-15, live):

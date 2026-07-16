@@ -1,5 +1,5 @@
 # Deploy-Compose für den GEMEINSAMEN Hetzner-Host (167.233.218.238), auf dem
-# diese App ("erfassung") neben "brain-cockpit" (Root "/") läuft.
+# diese App ("erfassung") neben "mycrafton" (Cockpit) (Root "/") läuft.
 #
 # WICHTIG — gemeinsames Docker-Netzwerk erforderlich:
 # Der Caddy-Container von mycrafton (ehem. brain-cockpit) muss diesen Container per Name
@@ -22,7 +22,7 @@
 #       external: true
 #
 # Diese Datei erledigt das nur für die "erfassung"-Seite — die Änderung am
-# Cockpit-Compose muss von Hand auf dem Server (bzw. im brain-cockpit-Repo)
+# Cockpit-Compose muss von Hand auf dem Server (bzw. im mycrafton-Repo)
 # gemacht werden.
 #
 # Diese Compose-Datei startet BEWUSST KEINEN eigenen Caddy-Container — Caddy
